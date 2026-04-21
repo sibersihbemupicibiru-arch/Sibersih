@@ -13,8 +13,8 @@ import 'services/supabase_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
-    url: 'https://vkfiwanhdbukapkexcif.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZml3YW5oZGJ1a2Fwa2V4Y2lmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNjk2MzgsImV4cCI6MjA5MTc0NTYzOH0.nNDbbdyDADBzNq795xbtVEmw2lbsAYgKJG-jf14Z0g0',
+    url: 'https://ciaykezzojnksqlsioqh.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYXlrZXp6b2pua3NxbHNpb3FoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njc1ODA2MiwiZXhwIjoyMDkyMzM0MDYyfQ.glV4UI0HVHc4-id_uzFIeEqTQHuwTakOLbMNj2CnBfw',
     authCallbackUrlHostname: kIsWeb ? null : 'login-callback',
     authFlowType: kIsWeb ? AuthFlowType.implicit : AuthFlowType.pkce,
   );
