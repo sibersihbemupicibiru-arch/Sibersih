@@ -105,17 +105,7 @@ class SupabaseService {
     required String password,
   }) async {
     try {
-      final authResult = await _supabase.auth.signUp(
-        email: email.trim(), 
-        password: password,
-        data: {                         // ← TAMBAHKAN INI
-        'display_name': nama,
-        'full_name': nama,
-        'nim': nim,
-        'jurusan': jurusan,
-      },
-      );
-
+      final authResult = await _supabase.auth.signUp(email: email.trim(), password: password);
       final user = authResult.user;
       if (user == null) return AuthResult.error('Registrasi gagal');
 
@@ -237,32 +227,40 @@ class SupabaseService {
 
   Future<bool> submitLaporan({
     required List<Uint8List> fotoBytes,
-    required double berat,
-    required String lokasi,
+    required String kategori,   // 'plastik' | 'kaca'
+    required String ukuran,     // 'kecil' | 'sedang' | 'besar'
+    required int poin,
     required String catatan,
   }) async {
     final authUser = _supabase.auth.currentUser;
     if (authUser == null) return false;
+    const lokasi = 'Gedung B lt 1'; // fixed
     try {
       final urls = <String>[];
       for (var bytes in fotoBytes) {
         final path = 'laporan/${authUser.id}/${DateTime.now().microsecondsSinceEpoch}.jpg';
         await _supabase.storage.from('laporan_photos').uploadBinary(path, bytes);
-        urls.add(_supabase.storage.from('laporan_photos').getPublicUrl(path));
+        final url = _supabase.storage.from('laporan_photos').getPublicUrl(path);
+        if (url.isNotEmpty) urls.add(url);
       }
+      if (urls.isEmpty) return false;
       await _supabase.from('laporans').insert({
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
         'user_id': authUser.id,
-        'nama_pelapor': _currentUser?.nama,
-        'nim': _currentUser?.nim,
         'foto_urls': urls,
-        'berat': berat,
+        'kategori': kategori,
+        'ukuran': ukuran,
+        'poin_diterima': poin,
         'lokasi': lokasi,
         'catatan': catatan,
         'status': 'pending',
         'tanggal': DateTime.now().toIso8601String(),
       });
       return true;
-    } catch (e) { return false; }
+    } catch (e) {
+      print('LAPORAN ERROR: $e');
+      return false;
+    }
   }
 
   Future<List<LaporanModel>> getRiwayatLaporan() async {
