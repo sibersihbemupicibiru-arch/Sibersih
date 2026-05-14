@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/ai_scan_service.dart';
 import '../services/supabase_service.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class _PickedPhoto {
   final Uint8List bytes;
@@ -13,7 +14,10 @@ class _PickedPhoto {
   _PickedPhoto(this.bytes, this.name);
 }
 
-// ─── Poin table ─────────────────────────────────────────────
+// ─── Poin table (DISPLAY ONLY) ───────────────────────────────
+// Dipakai hanya untuk preview di UI (chip ukuran & estimasi poin).
+// Kalkulasi poin resmi dilakukan di Edge Function `submit-laporan`.
+// Jika tabel ini diubah, pastikan edge function ikut diperbarui.
 const Map<String, Map<String, int>> _poinTable = {
   'plastik': {'kecil': 50, 'sedang': 100, 'besar': 150},
   'kaca': {'kecil': 150, 'besar': 200},
@@ -33,8 +37,16 @@ class LaporanSampahPage extends StatefulWidget {
 
 class _LaporanSampahPageState extends State<LaporanSampahPage>
     with TickerProviderStateMixin {
+  DateTime? _lastSubmitTime;
   final ImagePicker _picker = ImagePicker();
   final List<_PickedPhoto> _photos = [];
+
+  // Hash per foto — index selaras dengan _photos
+  final List<String> _fotoHashes = [];
+
+  // Cache DB hashes — di-fetch sekali saat foto pertama ditambah
+  List<String>? _dbHashes;
+
   late PageController _carouselController;
   int _carouselIndex = 0;
 
@@ -55,6 +67,35 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   late AnimationController _successController;
 
   static const String _lokasiDefault = 'Gedung B lt 1';
+
+  // ─── Image helpers ───────────────────────────────────────
+
+  Future<Uint8List> _compressImage(Uint8List bytes) async {
+    final result = await FlutterImageCompress.compressWithList(
+      bytes,
+      quality: 70,
+      minWidth: 1280,
+      minHeight: 1280,
+    );
+    return Uint8List.fromList(result);
+  }
+
+  bool _isImageTooLarge(Uint8List bytes) {
+    const maxSize = 5 * 1024 * 1024; // 5 MB
+    return bytes.length > maxSize;
+  }
+
+  bool _isValidImage(Uint8List bytes) {
+    if (bytes.length < 4) return false;
+    // JPEG
+    if (bytes[0] == 0xFF && bytes[1] == 0xD8) return true;
+    // PNG
+    if (bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) return true;
+    return false;
+  }
 
   @override
   void initState() {
@@ -103,10 +144,11 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
       );
       if (file == null || !mounted) return;
       final bytes = await file.readAsBytes();
-      if (bytes.isEmpty) return;
-      await _addPhotoAndScan(bytes, file.name);
+      await _validateAndProcess(bytes, file.name);
     } on PlatformException catch (e) {
-      if (mounted) _showSnack('Kamera tidak bisa dibuka: ${e.message ?? "coba Galeri"}');
+      if (mounted) {
+        _showSnack('Kamera tidak bisa dibuka: ${e.message ?? "coba Galeri"}');
+      }
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -116,16 +158,22 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     if (_picking) return;
     setState(() => _picking = true);
     try {
-      final files = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 1920);
+      final files = await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1280);
       for (final f in files) {
+        if (_photos.length >= 5) {
+          _showSnack('Maksimal 5 foto');
+          break;
+        }
         final bytes = await f.readAsBytes();
-        if (bytes.isNotEmpty) await _addPhotoAndScan(bytes, f.name);
+        await _validateAndProcess(bytes, f.name);
       }
+      // Fallback untuk platform yang tidak support pickMultiImage
       if (files.isEmpty) {
-        final one = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+        final one = await _picker.pickImage(
+            source: ImageSource.gallery, imageQuality: 70);
         if (one != null) {
           final bytes = await one.readAsBytes();
-          if (bytes.isNotEmpty) await _addPhotoAndScan(bytes, one.name);
+          await _validateAndProcess(bytes, one.name);
         }
       }
     } catch (_) {
@@ -135,15 +183,64 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     }
   }
 
-  Future<void> _addPhotoAndScan(Uint8List bytes, String name) async {
+  /// Validasi → compress → jalankan workflow utama.
+  Future<void> _validateAndProcess(Uint8List bytes, String name) async {
+    if (!mounted) return;
+
+    if (bytes.isEmpty) return;
+
+    if (_photos.length >= 5) {
+      _showSnack('Maksimal 5 foto');
+      return;
+    }
+
+    if (_isImageTooLarge(bytes)) {
+      _showSnack('Ukuran gambar terlalu besar 😭');
+      return;
+    }
+
+    if (!_isValidImage(bytes)) {
+      _showSnack('Format gambar tidak valid');
+      return;
+    }
+
+    final compressed = await _compressImage(bytes);
+    await _addPhotoWithWorkflow(compressed, name);
+  }
+
+  // ─── Workflow utama ──────────────────────────────────────
+  //
+  // 1. dHash foto baru
+  // 2. Fetch DB hashes (sekali, lalu cache)
+  // 3. Hamming distance vs DB → tolak jika duplikat
+  // 4. Tambah foto ke list & tampilkan
+  // 5. AI scan
+  //
+  Future<void> _addPhotoWithWorkflow(Uint8List bytes, String name) async {
+    // ── Step 1: dHash ──────────────────────────────────────
+    final hash = SupabaseService.instance.hashImage(bytes);
+
+    // ── Step 2: Fetch DB hashes (cache setelah pertama kali) ──
+    _dbHashes ??= await SupabaseService.instance.getUserFotoHashes();
+
+    // ── Step 3: Cek duplikat via hamming distance ──────────
+    if (hash.isNotEmpty &&
+        SupabaseService.instance.isDuplicateHash(hash, _dbHashes!)) {
+      if (mounted) _showSnack('Foto ini sepertinya sudah pernah dikirim 🔄');
+      return;
+    }
+
+    // ── Step 4: Tambah ke list ─────────────────────────────
     setState(() {
       _photos.add(_PickedPhoto(bytes, name));
+      _fotoHashes.add(hash);
       _carouselIndex = _photos.length - 1;
       _isScanning = true;
     });
     _jumpCarouselTo(_carouselIndex);
     _scanLineController.repeat();
 
+    // ── Step 5: AI scan ────────────────────────────────────
     final result = await AiScanService.analyzeImage(bytes, sourceName: name);
 
     if (mounted) {
@@ -225,6 +322,7 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   void _removePhotoAt(int index) {
     setState(() {
       _photos.removeAt(index);
+      _fotoHashes.removeAt(index); // sync hash list
       _carouselIndex =
           _photos.isEmpty ? 0 : (_carouselIndex).clamp(0, _photos.length - 1);
       if (_photos.isEmpty) {
@@ -242,6 +340,13 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   // ─── Submit ──────────────────────────────────────────────
 
   Future<void> _submitLaporan() async {
+    final now = DateTime.now();
+    if (_lastSubmitTime != null &&
+        now.difference(_lastSubmitTime!).inSeconds < 10) {
+      _showSnack('Tunggu beberapa detik sebelum kirim lagi 😭');
+      return;
+    }
+
     if (_photos.isEmpty) {
       _showSnack('Tambah minimal satu foto botol 📸');
       return;
@@ -269,19 +374,35 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
 
     setState(() => _isSubmitting = true);
 
-    final poin = _hitungPoin(_kategoriBottle, _ukuran);
+    try {
+      final submitResult = await SupabaseService.instance.submitLaporan(
+        fotoBytes : _photos.map((p) => p.bytes).toList(),
+        fotoHashes: List<String>.from(_fotoHashes), // sudah dihitung saat pick
+        kategori  : _kategoriBottle!,
+        ukuran    : _ukuran!,
+        catatan   : _catatanController.text,
+      );
 
-    final ok = await SupabaseService.instance.submitLaporan(
-      fotoBytes: _photos.map((p) => p.bytes).toList(),
-      kategori: _kategoriBottle!,
-      ukuran: _ukuran!,
-      poin: poin,
-      catatan: _catatanController.text,
-    );
+      if (!mounted) return;
 
-    if (mounted) {
-      setState(() => _isSubmitting = false);
-      _showResultDialog(ok, poin);
+      if (submitResult.status == SubmitStatus.duplicate) {
+        _showSnack('Foto ini sudah pernah dikirim sebelumnya 🔄');
+        return;
+      }
+
+      if (submitResult.status == SubmitStatus.success) {
+        _lastSubmitTime = DateTime.now();
+      }
+
+      _showResultDialog(
+        submitResult.status == SubmitStatus.success,
+        submitResult.poin,
+      );
+    } catch (e) {
+      debugPrint('Submit error: $e');
+      if (mounted) _showSnack('Gagal mengirim laporan 😭');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -357,6 +478,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
             if (success) {
               setState(() {
                 _photos.clear();
+                _fotoHashes.clear();
+                _dbHashes = null; // reset cache agar re-fetch next time
                 _carouselIndex = 0;
                 _kategoriBottle = null;
                 _ukuran = null;
@@ -1064,6 +1187,7 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     );
   }
 }
+
 
 // ─── Scan overlay widget ─────────────────────────────────────
 
