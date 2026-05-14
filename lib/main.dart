@@ -78,6 +78,7 @@ class _SibersihAppState extends State<SibersihApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      showPerformanceOverlay: true,
       navigatorKey: _navigatorKey,
       title: 'Sibersih',
       debugShowCheckedModeBanner: false,
