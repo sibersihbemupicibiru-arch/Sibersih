@@ -297,7 +297,7 @@ class SupabaseService {
   bool isDuplicateHash(
     String newHash,
     List<String> existingHashes, {
-    int threshold = 10,
+    int threshold = 102, // ~10% dari 1024 bit (dulu 10 dari 64 bit)
   }) {
     for (final h in existingHashes) {
       if (_hammingDistance(newHash, h) <= threshold) return true;
@@ -433,22 +433,27 @@ class SupabaseService {
   /// Difference Hash (dHash) 8x8 → 64-bit string '0'/'1'.
   /// Dipakai untuk deteksi foto duplikat via hamming distance.
   String hashImage(Uint8List bytes) {
-    final image = img.decodeImage(bytes);
-    if (image == null) return '';
+  final image = img.decodeImage(bytes);
+  if (image == null) return '';
 
-    // Resize ke 9×8 (9 lebar agar bisa compare pixel kiri-kanan = 8 diff)
-    final resized = img.copyResize(image, width: 9, height: 8);
+  // Resize ke 32×32 lalu grayscale
+  final resized = img.copyResize(image, width: 32, height: 32);
+  final grayscale = img.grayscale(resized);
 
-    final hash = <int>[];
-    for (int y = 0; y < 8; y++) {
-      for (int x = 0; x < 8; x++) {
-        final left  = resized.getPixel(x, y).luminance;
-        final right = resized.getPixel(x + 1, y).luminance;
-        hash.add(left > right ? 1 : 0);
-      }
+  // Kumpulkan semua nilai luminance
+  final pixels = <double>[];
+  for (int y = 0; y < 32; y++) {
+    for (int x = 0; x < 32; x++) {
+      pixels.add(grayscale.getPixel(x, y).luminance.toDouble());
     }
-    return hash.join();
   }
+
+  // Hitung rata-rata
+  final avg = pixels.reduce((a, b) => a + b) / pixels.length;
+
+  // Tiap pixel dibandingkan vs rata-rata
+  return pixels.map((p) => p > avg ? '1' : '0').join();
+}
 
   // -----------------------------------------------------------
   //  UTILITY (private)
