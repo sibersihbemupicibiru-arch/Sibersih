@@ -138,7 +138,7 @@ class _SibersihAppState extends State<SibersihApp> {
           elevation: 0,
           centerTitle: true,
         ),
-        cardTheme: CardThemeData(
+        cardTheme: CardTheme(
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           color: Colors.white,
@@ -197,7 +197,7 @@ class _SibersihAppState extends State<SibersihApp> {
           elevation: 0,
           centerTitle: true,
         ),
-        cardTheme: CardThemeData(
+        cardTheme: CardTheme(
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           color: SibersihColors.cardDark,
