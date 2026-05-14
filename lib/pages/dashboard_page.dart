@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import '../models/user_model.dart';
 import '../services/supabase_service.dart';
@@ -17,7 +18,6 @@ class _DashboardPageState extends State<DashboardPage>
     with TickerProviderStateMixin {
   late AnimationController _headerController;
   late AnimationController _cardsController;
-  late AnimationController _quoteController;
   late AnimationController _shimmerController;
   late AnimationController _rankPulseController;
 
@@ -27,6 +27,7 @@ class _DashboardPageState extends State<DashboardPage>
   UserModel? _user;
   List<Map<String, String>> _quotes = [];
   bool _loading = true;
+  Timer? _quoteTimer;
 
   @override
   void initState() {
@@ -36,9 +37,6 @@ class _DashboardPageState extends State<DashboardPage>
         duration: const Duration(milliseconds: 1000), vsync: this);
     _cardsController = AnimationController(
         duration: const Duration(milliseconds: 1200), vsync: this);
-    _quoteController =
-        AnimationController(duration: const Duration(seconds: 5), vsync: this)
-          ..repeat();
     _shimmerController =
         AnimationController(duration: const Duration(seconds: 2), vsync: this)
           ..repeat();
@@ -72,24 +70,27 @@ class _DashboardPageState extends State<DashboardPage>
       _loading = false;
     });
 
+    // Stop shimmer — skeleton sudah tidak tampil
+    _shimmerController.stop();
+
     _headerController.forward();
     await Future.delayed(const Duration(milliseconds: 300));
     _cardsController.forward();
 
-    // Auto-rotate quotes
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 5));
-      if (!mounted || _quotes.isEmpty) return false;
-      setState(() => _currentQuote = (_currentQuote + 1) % _quotes.length);
-      return true;
-    });
+    // Auto-rotate quotes pakai Timer supaya bisa di-cancel saat dispose
+    if (_quotes.length > 1) {
+      _quoteTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!mounted) return;
+        setState(() => _currentQuote = (_currentQuote + 1) % _quotes.length);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _quoteTimer?.cancel();
     _headerController.dispose();
     _cardsController.dispose();
-    _quoteController.dispose();
     _shimmerController.dispose();
     _rankPulseController.dispose();
     super.dispose();
@@ -523,25 +524,25 @@ class _DashboardPageState extends State<DashboardPage>
     final user = _user!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return AnimatedBuilder(
-      animation: _rankPulseController,
-      builder: (_, __) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.07),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Trophy with pulse
-            Transform.scale(
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Trophy with pulse — hanya bagian ini yang rebuild tiap frame
+          AnimatedBuilder(
+            animation: _rankPulseController,
+            builder: (_, __) => Transform.scale(
               scale: 1.0 + _rankPulseController.value * 0.05,
               child: Container(
                 width: 60,
@@ -562,6 +563,7 @@ class _DashboardPageState extends State<DashboardPage>
                 child: const Center(child: Text('🏆', style: TextStyle(fontSize: 28))),
               ),
             ),
+          ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -606,7 +608,6 @@ class _DashboardPageState extends State<DashboardPage>
             ),
           ],
         ),
-      ),
     );
   }
 
