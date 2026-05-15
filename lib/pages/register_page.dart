@@ -3,7 +3,11 @@ import 'package:flutter/services.dart';
 import '../services/supabase_service.dart';
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  // Jika dari Google login → googleEmail diisi, mode "lengkapi profil"
+  // Jika register biasa      → googleEmail null
+  final String? googleEmail;
+
+  const RegisterPage({super.key, this.googleEmail});
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -25,7 +29,9 @@ class _RegisterPageState extends State<RegisterPage>
   bool _isLoading = false;
   bool _agreeTerms = false;
 
-  // Daftar jurusan — sesuaikan dengan kampus
+  // true  → dari Google, sembunyikan password & lock email
+  bool get _isGoogleMode => widget.googleEmail != null;
+
   static const List<String> _jurusanList = [
     'Teknik Informatika',
     'Teknik Komputer',
@@ -46,6 +52,11 @@ class _RegisterPageState extends State<RegisterPage>
     _controller =
         AnimationController(duration: const Duration(milliseconds: 800), vsync: this)
           ..forward();
+
+    // Prefill email dari akun Google
+    if (_isGoogleMode) {
+      _emailController.text = widget.googleEmail!;
+    }
   }
 
   @override
@@ -72,13 +83,25 @@ class _RegisterPageState extends State<RegisterPage>
 
     setState(() => _isLoading = true);
 
-    final result = await SupabaseService.instance.register(
-      nama: _nameController.text.trim(),
-      nim: _nimController.text.trim(),
-      jurusan: _selectedJurusan!,
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
+    AuthResult result;
+
+    if (_isGoogleMode) {
+      // User sudah ter-auth via Google, tinggal simpan profil ke tabel users
+      result = await SupabaseService.instance.completeGoogleProfile(
+        nama: _nameController.text.trim(),
+        nim: _nimController.text.trim(),
+        jurusan: _selectedJurusan!,
+      );
+    } else {
+      // Register manual: buat auth user sekaligus simpan profil
+      result = await SupabaseService.instance.register(
+        nama: _nameController.text.trim(),
+        nim: _nimController.text.trim(),
+        jurusan: _selectedJurusan!,
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    }
 
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -86,7 +109,7 @@ class _RegisterPageState extends State<RegisterPage>
     if (result.success) {
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      _showSnack(result.errorMessage ?? 'Registrasi gagal. Coba lagi.');
+      _showSnack(result.errorMessage ?? 'Gagal menyimpan data. Coba lagi.');
     }
   }
 
@@ -152,12 +175,54 @@ class _RegisterPageState extends State<RegisterPage>
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text('Buat Akun Baru',
-                          style: TextStyle(
-                              color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                      // ── Judul berubah sesuai mode ──
+                      Text(
+                        _isGoogleMode ? 'Lengkapi Profil' : 'Buat Akun Baru',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900),
+                      ),
                       const SizedBox(height: 4),
-                      const Text('Bergabung dan mulai kumpulkan poin! 🥤',
-                          style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      Text(
+                        _isGoogleMode
+                            ? 'Isi data diri kamu untuk mulai 🌿'
+                            : 'Bergabung dan mulai kumpulkan poin! 🥤',
+                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      // ── Badge Google jika mode Google ──
+                      if (_isGoogleMode) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white30),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 18,
+                                height: 18,
+                                decoration: const BoxDecoration(
+                                    color: Colors.white, shape: BoxShape.circle),
+                                child: const Center(
+                                  child: Text('G',
+                                      style: TextStyle(
+                                          color: Color(0xFF4285F4),
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11)),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                widget.googleEmail!,
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 28),
                       Container(
                         decoration: BoxDecoration(
@@ -206,67 +271,77 @@ class _RegisterPageState extends State<RegisterPage>
                               const SizedBox(height: 8),
                               _buildJurusanDropdown(),
                               const SizedBox(height: 16),
+
+                              // ── Email: disabled & prefilled jika Google mode ──
                               _label('Email Kampus'),
                               const SizedBox(height: 8),
                               _field(
                                 controller: _emailController,
                                 hint: 'email@kampus.ac.id',
-                                icon: Icons.email_outlined,
+                                icon: _isGoogleMode
+                                    ? Icons.verified_outlined // ikon penanda email terkunci
+                                    : Icons.email_outlined,
                                 keyboardType: TextInputType.emailAddress,
+                                enabled: !_isGoogleMode, // ← kunci field jika Google mode
                                 validator: (v) {
                                   if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
                                   if (!v.contains('@')) return 'Format email tidak valid';
                                   return null;
                                 },
                               ),
-                              const SizedBox(height: 16),
-                              _label('Kata Sandi'),
-                              const SizedBox(height: 8),
-                              _field(
-                                controller: _passwordController,
-                                hint: 'Min. 8 karakter',
-                                icon: Icons.lock_outline_rounded,
-                                obscure: _obscurePassword,
-                                suffix: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    color: Colors.grey,
-                                    size: 20,
+
+                              // ── Password section: HANYA tampil jika bukan Google mode ──
+                              if (!_isGoogleMode) ...[
+                                const SizedBox(height: 16),
+                                _label('Kata Sandi'),
+                                const SizedBox(height: 8),
+                                _field(
+                                  controller: _passwordController,
+                                  hint: 'Min. 8 karakter',
+                                  icon: Icons.lock_outline_rounded,
+                                  obscure: _obscurePassword,
+                                  suffix: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      color: Colors.grey,
+                                      size: 20,
+                                    ),
+                                    onPressed: () =>
+                                        setState(() => _obscurePassword = !_obscurePassword),
                                   ),
-                                  onPressed: () =>
-                                      setState(() => _obscurePassword = !_obscurePassword),
+                                  validator: (v) =>
+                                      (v == null || v.length < 8) ? 'Minimal 8 karakter' : null,
                                 ),
-                                validator: (v) =>
-                                    (v == null || v.length < 8) ? 'Minimal 8 karakter' : null,
-                              ),
-                              const SizedBox(height: 16),
-                              _label('Konfirmasi Kata Sandi'),
-                              const SizedBox(height: 8),
-                              _field(
-                                controller: _confirmController,
-                                hint: 'Ulangi kata sandi',
-                                icon: Icons.lock_reset_outlined,
-                                obscure: _obscureConfirm,
-                                suffix: IconButton(
-                                  icon: Icon(
-                                    _obscureConfirm
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    color: Colors.grey,
-                                    size: 20,
+                                const SizedBox(height: 16),
+                                _label('Konfirmasi Kata Sandi'),
+                                const SizedBox(height: 8),
+                                _field(
+                                  controller: _confirmController,
+                                  hint: 'Ulangi kata sandi',
+                                  icon: Icons.lock_reset_outlined,
+                                  obscure: _obscureConfirm,
+                                  suffix: IconButton(
+                                    icon: Icon(
+                                      _obscureConfirm
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      color: Colors.grey,
+                                      size: 20,
+                                    ),
+                                    onPressed: () =>
+                                        setState(() => _obscureConfirm = !_obscureConfirm),
                                   ),
-                                  onPressed: () =>
-                                      setState(() => _obscureConfirm = !_obscureConfirm),
+                                  validator: (v) {
+                                    if (v != _passwordController.text) {
+                                      return 'Kata sandi tidak sama';
+                                    }
+                                    return null;
+                                  },
                                 ),
-                                validator: (v) {
-                                  if (v != _passwordController.text) {
-                                    return 'Kata sandi tidak sama';
-                                  }
-                                  return null;
-                                },
-                              ),
+                              ],
+
                               const SizedBox(height: 20),
                               // Terms checkbox
                               Material(
@@ -328,7 +403,8 @@ class _RegisterPageState extends State<RegisterPage>
                                     shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14)),
                                     elevation: 6,
-                                    shadowColor: const Color(0xFF1007BA).withOpacity(0.4),
+                                    shadowColor:
+                                        const Color(0xFF1007BA).withOpacity(0.4),
                                   ),
                                   child: _isLoading
                                       ? const SizedBox(
@@ -336,9 +412,15 @@ class _RegisterPageState extends State<RegisterPage>
                                           height: 22,
                                           child: CircularProgressIndicator(
                                               color: Colors.white, strokeWidth: 2.5))
-                                      : const Text('Daftar Sekarang',
-                                          style: TextStyle(
-                                              fontSize: 16, fontWeight: FontWeight.w800)),
+                                      : Text(
+                                          // ── Label tombol berubah sesuai mode ──
+                                          _isGoogleMode
+                                              ? 'Simpan & Mulai'
+                                              : 'Daftar Sekarang',
+                                          style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w800),
+                                        ),
                                 ),
                               ),
                             ],
@@ -346,21 +428,23 @@ class _RegisterPageState extends State<RegisterPage>
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Sudah punya akun? ',
-                              style: TextStyle(color: Colors.grey)),
-                          GestureDetector(
-                            onTap: () =>
-                                Navigator.pushReplacementNamed(context, '/login'),
-                            child: const Text('Masuk',
-                                style: TextStyle(
-                                    color: Color(0xFF1007BA),
-                                    fontWeight: FontWeight.w700)),
-                          ),
-                        ],
-                      ),
+                      // Jika Google mode, tidak perlu link "Sudah punya akun?"
+                      if (!_isGoogleMode)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('Sudah punya akun? ',
+                                style: TextStyle(color: Colors.grey)),
+                            GestureDetector(
+                              onTap: () =>
+                                  Navigator.pushReplacementNamed(context, '/login'),
+                              child: const Text('Masuk',
+                                  style: TextStyle(
+                                      color: Color(0xFF1007BA),
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
                       const SizedBox(height: 32),
                     ],
                   ),
@@ -380,7 +464,8 @@ class _RegisterPageState extends State<RegisterPage>
       decoration: InputDecoration(
         hintText: 'Pilih jurusan',
         hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-        prefixIcon: const Icon(Icons.business_outlined, color: Color(0xFF1007BA), size: 20),
+        prefixIcon:
+            const Icon(Icons.business_outlined, color: Color(0xFF1007BA), size: 20),
         filled: true,
         fillColor: const Color(0xFF1007BA).withOpacity(0.05),
         border: OutlineInputBorder(
@@ -395,7 +480,8 @@ class _RegisterPageState extends State<RegisterPage>
       ),
       validator: (_) => _selectedJurusan == null ? 'Pilih jurusan' : null,
       items: _jurusanList
-          .map((j) => DropdownMenuItem(value: j, child: Text(j, style: const TextStyle(fontSize: 14))))
+          .map((j) =>
+              DropdownMenuItem(value: j, child: Text(j, style: const TextStyle(fontSize: 14))))
           .toList(),
       dropdownColor: Theme.of(context).cardColor,
       borderRadius: BorderRadius.circular(16),
@@ -405,7 +491,8 @@ class _RegisterPageState extends State<RegisterPage>
 
   Widget _label(String text) => Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey),
+        style:
+            const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.grey),
       );
 
   Widget _field({
@@ -413,6 +500,7 @@ class _RegisterPageState extends State<RegisterPage>
     required IconData icon,
     TextEditingController? controller,
     bool obscure = false,
+    bool enabled = true,      // ← parameter baru
     Widget? suffix,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
@@ -422,13 +510,21 @@ class _RegisterPageState extends State<RegisterPage>
       obscureText: obscure,
       keyboardType: keyboardType,
       validator: validator,
+      enabled: enabled,
+      style: TextStyle(
+        color: enabled
+            ? Theme.of(context).textTheme.bodyMedium?.color
+            : Colors.grey,
+      ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
         prefixIcon: Icon(icon, color: const Color(0xFF1007BA), size: 20),
         suffixIcon: suffix,
         filled: true,
-        fillColor: const Color(0xFF1007BA).withOpacity(0.05),
+        fillColor: enabled
+            ? const Color(0xFF1007BA).withOpacity(0.05)
+            : Colors.grey.withOpacity(0.08),   // bg redup jika disabled
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -436,6 +532,10 @@ class _RegisterPageState extends State<RegisterPage>
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF1007BA), width: 1.5),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

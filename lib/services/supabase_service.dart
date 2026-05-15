@@ -39,8 +39,8 @@ class SupabaseService {
   Future<AuthResult> loginWithGoogle() async {
     try {
       final redirectTo = kIsWeb
-          ? '${Uri.base.origin}${Uri.base.path}'
-          : 'com.example.sibersih://login-callback';
+          ? Uri.base.origin
+          : 'com.sibersih.app://login-callback';
 
       await _supabase.auth.signInWithOAuth(
         Provider.google,
@@ -51,6 +51,45 @@ class SupabaseService {
       return AuthResult.error('Login Google gagal. Coba lagi.');
     }
   }
+Future<AuthResult> completeGoogleProfile({
+  required String nama,
+  required String nim,
+  required String jurusan,
+}) async {
+  try {
+    final authUser = _supabase.auth.currentUser!;
+    final meta = authUser.userMetadata ?? {};
+
+    await _supabase.from('users').insert({
+      'id'            : authUser.id,
+      'nama'          : nama,
+      'nim'           : nim,
+      'jurusan'       : jurusan,
+      'email'         : authUser.email ?? '',
+      'total_poin'    : 0,
+      'poin_masuk'    : 0,
+      'poin_keluar'   : 0,
+      'rank'          : 999,
+      'jumlah_laporan': 0,
+      'level'         : 'Pemula',
+      'foto_url'      : meta['avatar_url'] as String?,
+    });
+
+    _currentUser = await _fetchUser(authUser.id);
+    return AuthResult.success();
+  } catch (e) {
+    return AuthResult.error(_extractError(e, defaultMessage: 'Gagal menyimpan profil'));
+  }
+}
+
+Future<bool> isProfileComplete(String uid) async {
+  final data = await _supabase
+      .from('users')
+      .select('id')
+      .eq('id', uid)
+      .maybeSingle();
+  return data != null;
+}
 
   Future<void> ensureUserRecord() async {
     final authUser = _supabase.auth.currentUser;

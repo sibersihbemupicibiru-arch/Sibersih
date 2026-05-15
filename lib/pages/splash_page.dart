@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
 
 class SplashPage extends StatefulWidget {
@@ -70,15 +71,24 @@ class _SplashPageState extends State<SplashPage>
   }
 
   void _startSequence() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    _logoController.forward();
-    await Future.delayed(const Duration(milliseconds: 600));
-    _textController.forward();
-    await Future.delayed(const Duration(milliseconds: 2000));
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, '/landing');
-    }
+  await Future.delayed(const Duration(milliseconds: 300));
+  _logoController.forward();
+
+  await Future.delayed(const Duration(milliseconds: 600));
+  _textController.forward();
+
+  await Future.delayed(const Duration(milliseconds: 2000));
+
+  if (!mounted) return;
+
+  final session = Supabase.instance.client.auth.currentSession;
+
+  if (session != null) {
+    Navigator.pushReplacementNamed(context, '/home');
+  } else {
+    Navigator.pushReplacementNamed(context, '/landing');
   }
+}
 
   @override
   void dispose() {

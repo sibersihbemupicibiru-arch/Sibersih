@@ -40,9 +40,12 @@ class _DashboardPageState extends State<DashboardPage>
     _shimmerController =
         AnimationController(duration: const Duration(seconds: 2), vsync: this)
           ..repeat();
+
+    // FIX #1: jangan langsung repeat() di initState.
+    // Controller diinit tanpa animasi dulu, repeat() dipanggil di _loadData()
+    // setelah data siap, dan dihentikan otomatis setelah beberapa siklus.
     _rankPulseController =
-        AnimationController(duration: const Duration(seconds: 2), vsync: this)
-          ..repeat(reverse: true);
+        AnimationController(duration: const Duration(seconds: 2), vsync: this);
 
     _pointsCount = Tween<double>(begin: 0, end: 2850).animate(
       CurvedAnimation(parent: _headerController, curve: Curves.easeOutCubic),
@@ -62,7 +65,8 @@ class _DashboardPageState extends State<DashboardPage>
     final quotes = results[1] as List<Map<String, String>>;
 
     _pointsCount = Tween<double>(begin: 0, end: user.totalPoin.toDouble())
-        .animate(CurvedAnimation(parent: _headerController, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(
+            parent: _headerController, curve: Curves.easeOutCubic));
 
     setState(() {
       _user = user;
@@ -76,6 +80,13 @@ class _DashboardPageState extends State<DashboardPage>
     _headerController.forward();
     await Future.delayed(const Duration(milliseconds: 300));
     _cardsController.forward();
+
+    // FIX #1 (lanjutan): mulai pulse setelah UI siap, stop otomatis setelah
+    // 8 detik (= 4 siklus) supaya engine bisa benar-benar idle.
+    _rankPulseController.repeat(reverse: true);
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted) _rankPulseController.stop();
+    });
 
     // Auto-rotate quotes pakai Timer supaya bisa di-cancel saat dispose
     if (_quotes.length > 1) {
@@ -99,7 +110,8 @@ class _DashboardPageState extends State<DashboardPage>
   void _handleMenuTap(String menu) {
     switch (menu) {
       case 'Detail Poin':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const DetailPoinPage()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const DetailPoinPage()));
         break;
       case 'Poin Masuk':
         _showPoinDialog('masuk');
@@ -108,7 +120,8 @@ class _DashboardPageState extends State<DashboardPage>
         _showPoinDialog('keluar');
         break;
       case 'Tukar Poin':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const TukarPoinPage()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const TukarPoinPage()));
         break;
     }
   }
@@ -164,48 +177,54 @@ class _DashboardPageState extends State<DashboardPage>
 
   // ─── Skeleton loading ─────────────────────────────────────
 
+  // FIX #2: AnimatedBuilder TIDAK lagi membungkus seluruh CustomScrollView.
+  // Setiap _skeletonBlock punya AnimatedBuilder sendiri → hanya blok itu
+  // yang di-rebuild per frame, bukan seluruh scroll view.
   Widget _buildSkeleton() {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (_, __) => CustomScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 220,
-            pinned: true,
-            backgroundColor: const Color(0xFF1007BA),
-            flexibleSpace: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF0A05A0), Color(0xFF2519D4)],
-                ),
+    return CustomScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [
+        SliverAppBar(
+          expandedHeight: 220,
+          pinned: true,
+          backgroundColor: const Color(0xFF1007BA),
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0A05A0), Color(0xFF2519D4)],
               ),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.all(20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate(
-                List.generate(5, (i) => _skeletonBlock(i)),
-              ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(20),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              List.generate(5, (i) => _skeletonBlock(i)),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _skeletonBlock(int i) {
     final heights = [120.0, 80.0, 140.0, 100.0, 60.0];
-    final t = (_shimmerController.value + i * 0.2) % 1.0;
-    final opacity = 0.3 + 0.3 * math.sin(t * math.pi);
-    return Container(
-      height: heights[i],
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(opacity),
-        borderRadius: BorderRadius.circular(20),
-      ),
+    // FIX #2 (lanjutan): AnimatedBuilder di dalam tiap blok.
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (_, __) {
+        final t = (_shimmerController.value + i * 0.2) % 1.0;
+        final opacity = 0.3 + 0.3 * math.sin(t * math.pi);
+        return Container(
+          height: heights[i],
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(opacity),
+            borderRadius: BorderRadius.circular(20),
+          ),
+        );
+      },
     );
   }
 
@@ -271,7 +290,8 @@ class _DashboardPageState extends State<DashboardPage>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text('Selamat Datang! 👋',
-                                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                      style: TextStyle(
+                                          color: Colors.white70, fontSize: 13)),
                                   const SizedBox(height: 2),
                                   Text(
                                     user.nama,
@@ -284,7 +304,8 @@ class _DashboardPageState extends State<DashboardPage>
                                   ),
                                   Text(
                                     '${user.nim} · ${user.jurusan}',
-                                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                    style: const TextStyle(
+                                        color: Colors.white54, fontSize: 11),
                                   ),
                                 ],
                               ),
@@ -297,14 +318,16 @@ class _DashboardPageState extends State<DashboardPage>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withOpacity(0.2),
-                                border: Border.all(color: Colors.white38, width: 2),
+                                border:
+                                    Border.all(color: Colors.white38, width: 2),
                               ),
                               child: user.fotoUrl != null
                                   ? ClipOval(
                                       child: Image.network(user.fotoUrl!,
                                           fit: BoxFit.cover))
                                   : const Center(
-                                      child: Text('🙋', style: TextStyle(fontSize: 26))),
+                                      child: Text('🙋',
+                                          style: TextStyle(fontSize: 26))),
                             ),
                           ],
                         ),
@@ -347,8 +370,12 @@ class _DashboardPageState extends State<DashboardPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(value,
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9)),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+              Text(label,
+                  style: const TextStyle(color: Colors.white54, fontSize: 9)),
             ],
           ),
         ],
@@ -389,16 +416,19 @@ class _DashboardPageState extends State<DashboardPage>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Total Poin Saya',
-                        style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        style:
+                            TextStyle(color: Colors.white70, fontSize: 14)),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.18),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         '${DateTime.now().year}',
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 12),
                       ),
                     ),
                   ],
@@ -420,7 +450,9 @@ class _DashboardPageState extends State<DashboardPage>
                       ),
                       const Padding(
                         padding: EdgeInsets.only(bottom: 6, left: 4),
-                        child: Text('poin', style: TextStyle(color: Colors.white60, fontSize: 15)),
+                        child: Text('poin',
+                            style: TextStyle(
+                                color: Colors.white60, fontSize: 15)),
                       ),
                     ],
                   ),
@@ -428,11 +460,26 @@ class _DashboardPageState extends State<DashboardPage>
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _pointChipCard('+${user.poinMasuk}', 'Masuk', Colors.greenAccent, Icons.arrow_downward_rounded, () => _handleMenuTap('Poin Masuk')),
+                    _pointChipCard(
+                        '+${user.poinMasuk}',
+                        'Masuk',
+                        Colors.greenAccent,
+                        Icons.arrow_downward_rounded,
+                        () => _handleMenuTap('Poin Masuk')),
                     const SizedBox(width: 8),
-                    _pointChipCard('-${user.poinKeluar}', 'Keluar', Colors.orangeAccent, Icons.arrow_upward_rounded, () => _handleMenuTap('Poin Keluar')),
+                    _pointChipCard(
+                        '-${user.poinKeluar}',
+                        'Keluar',
+                        Colors.orangeAccent,
+                        Icons.arrow_upward_rounded,
+                        () => _handleMenuTap('Poin Keluar')),
                     const SizedBox(width: 8),
-                    _pointChipCard('Tukar', 'Reward', Colors.lightBlueAccent, Icons.card_giftcard_rounded, () => _handleMenuTap('Tukar Poin')),
+                    _pointChipCard(
+                        'Tukar',
+                        'Reward',
+                        Colors.lightBlueAccent,
+                        Icons.card_giftcard_rounded,
+                        () => _handleMenuTap('Tukar Poin')),
                   ],
                 ),
               ],
@@ -443,7 +490,8 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _pointChipCard(String value, String label, Color color, IconData icon, VoidCallback onTap) {
+  Widget _pointChipCard(String value, String label, Color color, IconData icon,
+      VoidCallback onTap) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -458,8 +506,14 @@ class _DashboardPageState extends State<DashboardPage>
             children: [
               Icon(icon, color: color, size: 18),
               const SizedBox(height: 4),
-              Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 12)),
-              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10), textAlign: TextAlign.center),
+              Text(value,
+                  style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12)),
+              Text(label,
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                  textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -471,7 +525,8 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _buildMenuGrid() {
     final menus = [
-      _MenuItem('Detail Poin', Icons.bar_chart_rounded, const Color(0xFF1007BA)),
+      _MenuItem(
+          'Detail Poin', Icons.bar_chart_rounded, const Color(0xFF1007BA)),
       _MenuItem('Poin Masuk', Icons.trending_up_rounded, Colors.green),
       _MenuItem('Poin Keluar', Icons.trending_down_rounded, Colors.orange),
       _MenuItem('Tukar Poin', Icons.card_giftcard_rounded, Colors.purple),
@@ -480,7 +535,8 @@ class _DashboardPageState extends State<DashboardPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Menu Poin', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text('Menu Poin',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 14),
         GridView.count(
           shrinkWrap: true,
@@ -511,7 +567,8 @@ class _DashboardPageState extends State<DashboardPage>
           ),
           const SizedBox(height: 7),
           Text(item.label,
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+              style:
+                  const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
               textAlign: TextAlign.center),
         ],
       ),
@@ -539,11 +596,13 @@ class _DashboardPageState extends State<DashboardPage>
       ),
       child: Row(
         children: [
-          // Trophy with pulse — hanya bagian ini yang rebuild tiap frame
-          AnimatedBuilder(
-            animation: _rankPulseController,
-            builder: (_, __) => Transform.scale(
-              scale: 1.0 + _rankPulseController.value * 0.05,
+          // FIX #3: RepaintBoundary mengisolasi repaint agar tidak merambat ke
+          // widget lain. Parameter `child` di AnimatedBuilder meng-cache widget
+          // statis (Container + emoji) sehingga tidak direkonstruksi tiap frame.
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _rankPulseController,
+              // Widget statis diletakkan di `child` — Flutter tidak rebuild ini tiap frame
               child: Container(
                 width: 60,
                 height: 60,
@@ -552,62 +611,81 @@ class _DashboardPageState extends State<DashboardPage>
                     colors: [Colors.amber.shade400, Colors.orange.shade400],
                   ),
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.amber.withOpacity(0.3 + _rankPulseController.value * 0.2),
-                      blurRadius: 12,
-                      spreadRadius: 2,
-                    ),
-                  ],
                 ),
-                child: const Center(child: Text('🏆', style: TextStyle(fontSize: 28))),
+                child:
+                    const Center(child: Text('🏆', style: TextStyle(fontSize: 28))),
+              ),
+              builder: (_, child) => Transform.scale(
+                scale: 1.0 + _rankPulseController.value * 0.05,
+                child: DecoratedBox(
+                  // Shadow yang berubah dipisahkan ke DecoratedBox,
+                  // sedangkan Container statis di-cache via parameter child
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.amber.withOpacity(
+                            0.3 + _rankPulseController.value * 0.2),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: child,
+                ),
               ),
             ),
           ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Peringkat Kamu', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  Text(
-                    '#${user.rank} dari 248 mahasiswa',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Peringkat Kamu',
+                    style: TextStyle(color: Colors.grey, fontSize: 12)),
+                Text(
+                  '#${user.rank} dari 248 mahasiswa',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: 1 - (user.rank / 248),
+                    minHeight: 6,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor:
+                        const AlwaysStoppedAnimation(Color(0xFF1007BA)),
                   ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: 1 - (user.rank / 248),
-                      minHeight: 6,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF1007BA)),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _levelColor(user.level).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _levelColor(user.level).withOpacity(0.4)),
-              ),
-              child: Column(
-                children: [
-                  Text(_levelEmoji(user.level), style: const TextStyle(fontSize: 18)),
-                  Text(user.level,
-                      style: TextStyle(
-                          color: _levelColor(user.level),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 11)),
-                ],
-              ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _levelColor(user.level).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: _levelColor(user.level).withOpacity(0.4)),
             ),
-          ],
-        ),
+            child: Column(
+              children: [
+                Text(_levelEmoji(user.level),
+                    style: const TextStyle(fontSize: 18)),
+                Text(user.level,
+                    style: TextStyle(
+                        color: _levelColor(user.level),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -626,10 +704,14 @@ class _DashboardPageState extends State<DashboardPage>
 
   String _levelEmoji(String level) {
     switch (level) {
-      case 'Platinum': return '💎';
-      case 'Emas': return '🥇';
-      case 'Aktif': return '🌱';
-      default: return '🌱';
+      case 'Platinum':
+        return '💎';
+      case 'Emas':
+        return '🥇';
+      case 'Aktif':
+        return '🌱';
+      default:
+        return '🌱';
     }
   }
 
@@ -641,14 +723,17 @@ class _DashboardPageState extends State<DashboardPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Motivasi Hari Ini 💬', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text('Motivasi Hari Ini 💬',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 14),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 600),
           transitionBuilder: (child, anim) => FadeTransition(
             opacity: anim,
             child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0.1, 0), end: Offset.zero).animate(anim),
+              position: Tween<Offset>(
+                      begin: const Offset(0.1, 0), end: Offset.zero)
+                  .animate(anim),
               child: child,
             ),
           ),
@@ -663,7 +748,8 @@ class _DashboardPageState extends State<DashboardPage>
                 ],
               ),
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFF1007BA).withOpacity(0.2)),
+              border: Border.all(
+                  color: const Color(0xFF1007BA).withOpacity(0.2)),
             ),
             child: Column(
               children: [
@@ -671,14 +757,19 @@ class _DashboardPageState extends State<DashboardPage>
                 const SizedBox(height: 14),
                 Text(
                   _quotes[_currentQuote]['text'] ?? '',
-                  style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic, height: 1.65),
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                      height: 1.65),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   _quotes[_currentQuote]['author'] ?? '',
                   style: const TextStyle(
-                      color: Color(0xFF1007BA), fontWeight: FontWeight.w700, fontSize: 12),
+                      color: Color(0xFF1007BA),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12),
                 ),
                 const SizedBox(height: 14),
                 Row(
@@ -721,7 +812,8 @@ class _DashboardPageState extends State<DashboardPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Cara Kerja Sibersih', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text('Cara Kerja Sibersih',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
         const Text('Mudah, cepat, dan menguntungkan! 🌟',
             style: TextStyle(color: Colors.grey, fontSize: 13)),
@@ -755,7 +847,8 @@ class _DashboardPageState extends State<DashboardPage>
                             child: Container(
                                 width: 2,
                                 height: 4,
-                                color: const Color(0xFF1007BA).withOpacity(0.25)),
+                                color: const Color(0xFF1007BA)
+                                    .withOpacity(0.25)),
                           ),
                         ),
                       ),
@@ -779,7 +872,8 @@ class _DashboardPageState extends State<DashboardPage>
             color: const Color(0xFF1007BA).withOpacity(0.1),
             shape: BoxShape.circle,
           ),
-          child: Center(child: Text(step.emoji, style: const TextStyle(fontSize: 22))),
+          child: Center(
+              child: Text(step.emoji, style: const TextStyle(fontSize: 22))),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -796,15 +890,21 @@ class _DashboardPageState extends State<DashboardPage>
                     child: Center(
                       child: Text(step.number,
                           style: const TextStyle(
-                              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800)),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(step.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  Text(step.title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
                 ],
               ),
               const SizedBox(height: 2),
-              Text(step.subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              Text(step.subtitle,
+                  style:
+                      const TextStyle(color: Colors.grey, fontSize: 12)),
             ],
           ),
         ),
@@ -816,9 +916,30 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _buildRecentActivity() {
     final activities = [
-      {'icon': '🥤', 'type': 'Botol Plastik', 'weight': '1.2 kg', 'points': '+120', 'time': '2 jam lalu', 'status': 'Terverifikasi'},
-      {'icon': '🥤', 'type': 'Botol Plastik', 'weight': '0.8 kg', 'points': '+80', 'time': 'Kemarin', 'status': 'Terverifikasi'},
-      {'icon': '🥤', 'type': 'Botol Plastik', 'weight': '2.5 kg', 'points': '0', 'time': '2 hari lalu', 'status': 'Menunggu'},
+      {
+        'icon': '🥤',
+        'type': 'Botol Plastik',
+        'weight': '1.2 kg',
+        'points': '+120',
+        'time': '2 jam lalu',
+        'status': 'Terverifikasi'
+      },
+      {
+        'icon': '🥤',
+        'type': 'Botol Plastik',
+        'weight': '0.8 kg',
+        'points': '+80',
+        'time': 'Kemarin',
+        'status': 'Terverifikasi'
+      },
+      {
+        'icon': '🥤',
+        'type': 'Botol Plastik',
+        'weight': '2.5 kg',
+        'points': '0',
+        'time': '2 hari lalu',
+        'status': 'Menunggu'
+      },
     ];
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -828,10 +949,14 @@ class _DashboardPageState extends State<DashboardPage>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Aktivitas Terbaru', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const Text('Aktivitas Terbaru',
+                style:
+                    TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             TextButton(
               onPressed: () {},
-              child: const Text('Lihat Semua', style: TextStyle(color: Color(0xFF1007BA), fontSize: 13)),
+              child: const Text('Lihat Semua',
+                  style:
+                      TextStyle(color: Color(0xFF1007BA), fontSize: 13)),
             ),
           ],
         ),
@@ -860,7 +985,10 @@ class _ActivityTile extends StatelessWidget {
         color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Row(
@@ -872,14 +1000,18 @@ class _ActivityTile extends StatelessWidget {
               color: const Color(0xFF2196F3).withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(child: Text(activity['icon']!, style: const TextStyle(fontSize: 20))),
+            child: Center(
+                child: Text(activity['icon']!,
+                    style: const TextStyle(fontSize: 20))),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(activity['type']!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(activity['type']!,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14)),
                 Text('${activity['weight']} · ${activity['time']}',
                     style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ],
@@ -889,9 +1021,11 @@ class _ActivityTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
-                  color: (isVerified ? Colors.green : Colors.orange).withOpacity(0.1),
+                  color: (isVerified ? Colors.green : Colors.orange)
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(

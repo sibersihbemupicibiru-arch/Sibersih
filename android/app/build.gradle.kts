@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.sibersih"
+    namespace = "com.sibersih.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +23,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.sibersih"
+        applicationId = "com.sibersih.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
 

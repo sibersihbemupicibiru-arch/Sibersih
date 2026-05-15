@@ -64,7 +64,7 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   late AnimationController _headerController;
   late AnimationController _scanLineController;
   late AnimationController _pulseController;
-  late AnimationController _successController;
+  // FIX: _successController dihapus — tidak dipakai di build sama sekali.
 
   static const String _lokasiDefault = 'Gedung B lt 1';
 
@@ -110,14 +110,28 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
+    // FIX #1: jangan langsung repeat() di initState.
+    // repeat() dipanggil di _startPulse() yang dipicu setelah header selesai,
+    // dan dihentikan otomatis setelah beberapa siklus.
     _pulseController = AnimationController(
       duration: const Duration(seconds: 1),
       vsync: this,
-    )..repeat(reverse: true);
-    _successController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
     );
+
+    // Mulai pulse setelah header animation selesai
+    _headerController.addStatusListener(_onHeaderDone);
+  }
+
+  void _onHeaderDone(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _headerController.removeStatusListener(_onHeaderDone);
+      if (!mounted) return;
+      _pulseController.repeat(reverse: true);
+      // Stop otomatis setelah 6 detik (6 siklus)
+      Future.delayed(const Duration(seconds: 6), () {
+        if (mounted) _pulseController.stop();
+      });
+    }
   }
 
   @override
@@ -127,7 +141,6 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     _headerController.dispose();
     _scanLineController.dispose();
     _pulseController.dispose();
-    _successController.dispose();
     super.dispose();
   }
 
@@ -158,7 +171,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     if (_picking) return;
     setState(() => _picking = true);
     try {
-      final files = await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1280);
+      final files =
+          await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1280);
       for (final f in files) {
         if (_photos.length >= 5) {
           _showSnack('Maksimal 5 foto');
@@ -286,8 +300,11 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                   Text(result.label,
                       style: const TextStyle(fontWeight: FontWeight.w800)),
                   Text(
-                    isBottle ? result.message : 'Bukan botol, hapus dan ganti foto.',
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                    isBottle
+                        ? result.message
+                        : 'Bukan botol, hapus dan ganti foto.',
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                 ],
               ),
@@ -299,7 +316,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text('${result.confidencePercent}%',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 12)),
             ),
           ],
         ),
@@ -315,7 +333,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_carouselController.hasClients) return;
       _carouselController.animateToPage(i,
-          duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic);
     });
   }
 
@@ -376,11 +395,11 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
 
     try {
       final submitResult = await SupabaseService.instance.submitLaporan(
-        fotoBytes : _photos.map((p) => p.bytes).toList(),
+        fotoBytes: _photos.map((p) => p.bytes).toList(),
         fotoHashes: List<String>.from(_fotoHashes), // sudah dihitung saat pick
-        kategori  : _kategoriBottle!,
-        ukuran    : _ukuran!,
-        catatan   : _catatanController.text,
+        kategori: _kategoriBottle!,
+        ukuran: _ukuran!,
+        catatan: _catatanController.text,
       );
 
       if (!mounted) return;
@@ -421,11 +440,13 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                 color: Colors.red.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Center(child: Text('⚠️', style: TextStyle(fontSize: 40))),
+              child: const Center(
+                  child: Text('⚠️', style: TextStyle(fontSize: 40))),
             ),
             const SizedBox(height: 16),
             const Text('Objek Tidak Valid',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                style:
+                    TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             Text(result.message,
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
@@ -444,7 +465,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1007BA),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: const Text('Mengerti'),
           ),
@@ -458,7 +480,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
       SnackBar(
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         backgroundColor: const Color(0xFF1007BA),
       ),
     );
@@ -541,7 +564,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
 
   Widget _buildAppBar() {
     return SliverAppBar(
-      title: const Text('Laporan Sampah', style: TextStyle(fontWeight: FontWeight.w800)),
+      title: const Text('Laporan Sampah',
+          style: TextStyle(fontWeight: FontWeight.w800)),
       centerTitle: true,
       backgroundColor: const Color(0xFF1007BA),
       foregroundColor: Colors.white,
@@ -549,7 +573,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
       snap: true,
       flexibleSpace: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [Color(0xFF0A05A0), Color(0xFF2519D4)]),
+          gradient: LinearGradient(
+              colors: [Color(0xFF0A05A0), Color(0xFF2519D4)]),
         ),
       ),
     );
@@ -558,8 +583,26 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   Widget _buildInfoBanner(bool isDark) {
     return AnimatedBuilder(
       animation: _headerController,
-      builder: (_, __) => Opacity(
-        opacity: _headerController.value,
+      // FIX #2: widget statis (teks, layout) di-cache via parameter `child`
+      // agar tidak direkonstruksi tiap frame selama header animation.
+      child: const Padding(
+        padding: EdgeInsets.only(left: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Verifikasi AI Aktif',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+            SizedBox(height: 2),
+            Text(
+              'AI mendeteksi jenis botol dari foto. Kamu bisa ubah hasilnya & pilih ukuran sendiri.',
+              style:
+                  TextStyle(color: Colors.grey, fontSize: 12, height: 1.4),
+            ),
+          ],
+        ),
+      ),
+      builder: (_, staticChild) => Opacity(
+        opacity: _headerController.value.clamp(0.0, 1.0),
         child: Transform.translate(
           offset: Offset(0, (1 - _headerController.value) * 20),
           child: Container(
@@ -570,32 +613,25 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                 const Color(0xFF4C3FE8).withOpacity(0.05),
               ]),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF1007BA).withOpacity(0.2)),
+              border: Border.all(
+                  color: const Color(0xFF1007BA).withOpacity(0.2)),
             ),
             child: Row(
               children: [
-                AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (_, __) => Transform.scale(
-                    scale: 1.0 + _pulseController.value * 0.08,
+                // FIX #3: RepaintBoundary + child caching pada pulse emoji.
+                // Hanya emoji ini yang di-repaint tiap frame, bukan seluruh banner.
+                RepaintBoundary(
+                  child: AnimatedBuilder(
+                    animation: _pulseController,
                     child: const Text('🤖', style: TextStyle(fontSize: 28)),
+                    builder: (_, child) => Transform.scale(
+                      scale: 1.0 + _pulseController.value * 0.08,
+                      child: child,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Verifikasi AI Aktif',
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-                      SizedBox(height: 2),
-                      Text(
-                        'AI mendeteksi jenis botol dari foto. Kamu bisa ubah hasilnya & pilih ukuran sendiri.',
-                        style: TextStyle(color: Colors.grey, fontSize: 12, height: 1.4),
-                      ),
-                    ],
-                  ),
-                ),
+                Expanded(child: staticChild!),
               ],
             ),
           ),
@@ -614,7 +650,10 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFF1007BA).withOpacity(0.2)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -627,7 +666,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
               const Spacer(),
               if (_kategoriBottle != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -638,7 +678,10 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                       Icon(Icons.auto_awesome, color: Colors.blue, size: 12),
                       SizedBox(width: 4),
                       Text('Dari AI',
-                          style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.w700)),
+                          style: TextStyle(
+                              color: Colors.blue,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -680,10 +723,14 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1007BA) : const Color(0xFF1007BA).withOpacity(0.06),
+          color: selected
+              ? const Color(0xFF1007BA)
+              : const Color(0xFF1007BA).withOpacity(0.06),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? const Color(0xFF1007BA) : const Color(0xFF1007BA).withOpacity(0.2),
+            color: selected
+                ? const Color(0xFF1007BA)
+                : const Color(0xFF1007BA).withOpacity(0.2),
             width: 1.5,
           ),
         ),
@@ -703,8 +750,14 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   }
 
   Widget _buildUkuranSelector() {
-    final ukuranList = _kategoriBottle == 'kaca' ? ['kecil', 'besar'] : ['kecil', 'sedang', 'besar'];
-    final labelMap = {'kecil': '🔹 Kecil', 'sedang': '🔶 Sedang', 'besar': '🔴 Besar'};
+    final ukuranList = _kategoriBottle == 'kaca'
+        ? ['kecil', 'besar']
+        : ['kecil', 'sedang', 'besar'];
+    final labelMap = {
+      'kecil': '🔹 Kecil',
+      'sedang': '🔶 Sedang',
+      'besar': '🔴 Besar'
+    };
 
     if (_kategoriBottle == null) {
       return Container(
@@ -734,10 +787,14 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: selected ? Colors.green.withOpacity(0.15) : Colors.grey.withOpacity(0.07),
+                  color: selected
+                      ? Colors.green.withOpacity(0.15)
+                      : Colors.grey.withOpacity(0.07),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: selected ? Colors.green : Colors.grey.withOpacity(0.2),
+                    color: selected
+                        ? Colors.green
+                        : Colors.grey.withOpacity(0.2),
                     width: 1.5,
                   ),
                 ),
@@ -753,7 +810,9 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                         style: TextStyle(
                             fontWeight: FontWeight.w900,
                             fontSize: 13,
-                            color: selected ? Colors.green : Colors.grey.shade500)),
+                            color: selected
+                                ? Colors.green
+                                : Colors.grey.shade500)),
                   ],
                 ),
               ),
@@ -776,14 +835,18 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
         color: (isPlastik ? Colors.blue : Colors.brown).withOpacity(0.06),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: (isPlastik ? Colors.blue : Colors.brown).withOpacity(0.2)),
+            color:
+                (isPlastik ? Colors.blue : Colors.brown).withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            isPlastik ? '🥤 Tabel Poin Botol Plastik' : '🍶 Tabel Poin Botol Kaca',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+            isPlastik
+                ? '🥤 Tabel Poin Botol Plastik'
+                : '🍶 Tabel Poin Botol Kaca',
+            style:
+                const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
           ),
           const SizedBox(height: 8),
           ...entries.map((e) {
@@ -792,10 +855,13 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
-                  Text('${e.key[0].toUpperCase()}${e.key.substring(1)}',
+                  Text(
+                      '${e.key[0].toUpperCase()}${e.key.substring(1)}',
                       style: TextStyle(
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.normal,
+                          fontWeight: isSelected
+                              ? FontWeight.w800
+                              : FontWeight.normal,
                           color: isSelected ? Colors.green : Colors.grey)),
                   const Spacer(),
                   Text('+${e.value} poin',
@@ -805,7 +871,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                           color: isSelected ? Colors.green : Colors.grey)),
                   if (isSelected) ...[
                     const SizedBox(width: 6),
-                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 14),
+                    const Icon(Icons.check_circle_rounded,
+                        color: Colors.green, size: 14),
                   ],
                 ],
               ),
@@ -824,15 +891,18 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
             onPressed: _picking ? null : _pickFromCamera,
             icon: _picking
                 ? const SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.photo_camera_rounded, size: 20),
             label: const Text('Kamera'),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF1007BA),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
           ),
         ),
@@ -846,7 +916,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
               foregroundColor: const Color(0xFF1007BA),
               side: const BorderSide(color: Color(0xFF1007BA), width: 1.5),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
           ),
         ),
@@ -860,14 +931,18 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
       decoration: BoxDecoration(
         color: const Color(0xFF1007BA).withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1007BA).withOpacity(0.2)),
+        border:
+            Border.all(color: const Color(0xFF1007BA).withOpacity(0.2)),
       ),
       child: const Row(
         children: [
           SizedBox(
-            width: 20, height: 20,
+            width: 20,
+            height: 20,
             child: CircularProgressIndicator(
-                strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Color(0xFF1007BA))),
+                strokeWidth: 2,
+                valueColor:
+                    AlwaysStoppedAnimation(Color(0xFF1007BA))),
           ),
           SizedBox(width: 12),
           Text('AI sedang menganalisis foto…',
@@ -890,13 +965,17 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_a_photo_rounded, size: 48, color: Colors.grey.shade400),
+            Icon(Icons.add_a_photo_rounded,
+                size: 48, color: Colors.grey.shade400),
             const SizedBox(height: 10),
             Text('Belum ada foto',
-                style: TextStyle(fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade600)),
             const SizedBox(height: 4),
             Text('Kamera atau Galeri di atas',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                style:
+                    TextStyle(fontSize: 12, color: Colors.grey.shade500)),
           ],
         ),
       );
@@ -923,32 +1002,41 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.memory(p.bytes, fit: BoxFit.cover, gaplessPlayback: true),
+                        Image.memory(p.bytes,
+                            fit: BoxFit.cover, gaplessPlayback: true),
                         if (_isScanning && index == _photos.length - 1)
                           _ScanOverlay(controller: _scanLineController),
                         if (p.scanResult != null)
                           _ScanResultBadge(result: p.scanResult!),
                         Positioned(
-                          left: 10, top: 10,
+                          left: 10,
+                          top: 10,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
                                 color: Colors.black54,
                                 borderRadius: BorderRadius.circular(20)),
                             child: Text('${index + 1}/${_photos.length}',
                                 style: const TextStyle(
-                                    color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700)),
                           ),
                         ),
                         Positioned(
-                          right: 8, top: 8,
+                          right: 8,
+                          top: 8,
                           child: GestureDetector(
                             onTap: () => _removePhotoAt(index),
                             child: Container(
-                              width: 34, height: 34,
+                              width: 34,
+                              height: 34,
                               decoration: const BoxDecoration(
-                                  color: Colors.black54, shape: BoxShape.circle),
-                              child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.close_rounded,
+                                  color: Colors.white, size: 18),
                             ),
                           ),
                         ),
@@ -973,7 +1061,9 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
               decoration: BoxDecoration(
                 color: _carouselIndex == i
                     ? const Color(0xFF1007BA)
-                    : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                    : (isDark
+                        ? Colors.grey.shade700
+                        : Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -992,10 +1082,13 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
           decoration: BoxDecoration(
               color: const Color(0xFF1007BA).withOpacity(0.1),
               borderRadius: BorderRadius.circular(9)),
-          child: Icon(icon, color: const Color(0xFF1007BA), size: 17),
+          child:
+              Icon(icon, color: const Color(0xFF1007BA), size: 17),
         ),
         const SizedBox(width: 10),
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w800)),
       ],
     );
   }
@@ -1008,18 +1101,22 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Lokasi Pembuangan',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 13)),
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: Colors.grey.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                border:
+                    Border.all(color: Colors.grey.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.location_on_outlined, color: Colors.grey.shade400, size: 20),
+                  Icon(Icons.location_on_outlined,
+                      color: Colors.grey.shade400, size: 20),
                   const SizedBox(width: 12),
                   Text(_lokasiDefault,
                       style: TextStyle(
@@ -1027,7 +1124,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                           fontSize: 14,
                           fontWeight: FontWeight.w600)),
                   const Spacer(),
-                  Icon(Icons.lock_outline_rounded, color: Colors.grey.shade400, size: 16),
+                  Icon(Icons.lock_outline_rounded,
+                      color: Colors.grey.shade400, size: 16),
                 ],
               ),
             ),
@@ -1046,25 +1144,34 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Catatan (opsional)',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 13)),
             const SizedBox(height: 8),
             TextField(
               controller: _catatanController,
               maxLines: 3,
-              onChanged: (_) => setState(() {}),
+              // FIX #4: onChanged setState dihapus — _catatanController.text
+              // tidak mempengaruhi state apapun yang perlu di-rebuild.
+              // Teks dibaca langsung saat submit via _catatanController.text.
               decoration: InputDecoration(
                 hintText: 'Ada yang ingin ditambahkan?',
-                hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-                prefixIcon: const Icon(Icons.notes_rounded, color: Color(0xFF1007BA), size: 20),
+                hintStyle:
+                    const TextStyle(color: Colors.grey, fontSize: 13),
+                prefixIcon: const Icon(Icons.notes_rounded,
+                    color: Color(0xFF1007BA), size: 20),
                 filled: true,
-                fillColor: const Color(0xFF1007BA).withOpacity(0.05),
+                fillColor:
+                    const Color(0xFF1007BA).withOpacity(0.05),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF1007BA), width: 1.5),
+                  borderSide: const BorderSide(
+                      color: Color(0xFF1007BA), width: 1.5),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
               ),
             ),
           ],
@@ -1090,20 +1197,25 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Estimasi poin', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const Text('Estimasi poin',
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
               Text('+$poin poin',
                   style: const TextStyle(
-                      color: Colors.green, fontWeight: FontWeight.w900, fontSize: 20)),
+                      color: Colors.green,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20)),
             ],
           ),
           const Spacer(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
                 color: Colors.green.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(8)),
             child: const Text('Setelah verifikasi',
-                style: TextStyle(color: Colors.green, fontSize: 10, height: 1.4),
+                style: TextStyle(
+                    color: Colors.green, fontSize: 10, height: 1.4),
                 textAlign: TextAlign.center),
           ),
         ],
@@ -1128,19 +1240,24 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
         if (hasInvalid)
           Container(
             margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.orange.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withOpacity(0.4)),
+              border:
+                  Border.all(color: Colors.orange.withOpacity(0.4)),
             ),
             child: const Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+                Icon(Icons.warning_amber_rounded,
+                    color: Colors.orange, size: 18),
                 SizedBox(width: 8),
                 Expanded(
-                  child: Text('Ada foto yang bukan botol. Hapus dan ganti.',
-                      style: TextStyle(color: Colors.orange, fontSize: 12)),
+                  child: Text(
+                      'Ada foto yang bukan botol. Hapus dan ganti.',
+                      style:
+                          TextStyle(color: Colors.orange, fontSize: 12)),
                 ),
               ],
             ),
@@ -1154,19 +1271,24 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
               backgroundColor: const Color(0xFF1007BA),
               foregroundColor: Colors.white,
               disabledBackgroundColor: Colors.grey.shade300,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               elevation: 8,
-              shadowColor: const Color(0xFF1007BA).withOpacity(0.4),
+              shadowColor:
+                  const Color(0xFF1007BA).withOpacity(0.4),
             ),
             child: _isSubmitting
                 ? const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       SizedBox(
-                          width: 22, height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2.5)),
                       SizedBox(width: 12),
-                      Text('Mengirim…', style: TextStyle(fontSize: 16)),
+                      Text('Mengirim…',
+                          style: TextStyle(fontSize: 16)),
                     ],
                   )
                 : const Row(
@@ -1175,7 +1297,9 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                       Icon(Icons.send_rounded, size: 20),
                       SizedBox(width: 8),
                       Text('Kirim Laporan',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800)),
                     ],
                   ),
           ),
@@ -1207,7 +1331,9 @@ class _ScanOverlay extends StatelessWidget {
             builder: (_, __) {
               final y = controller.value * 200.0;
               return Positioned(
-                top: y, left: 20, right: 20,
+                top: y,
+                left: 20,
+                right: 20,
                 child: Container(
                   height: 2,
                   decoration: BoxDecoration(
@@ -1229,7 +1355,9 @@ class _ScanOverlay extends StatelessWidget {
                 Text('🤖', style: TextStyle(fontSize: 36)),
                 SizedBox(height: 8),
                 Text('Menganalisis…',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -1243,14 +1371,42 @@ class _ScanOverlay extends StatelessWidget {
     const thick = 3.0;
     const color = Color(0xFF4C3FE8);
     return [
-      const Positioned(top: 16, left: 16,
-          child: _Corner(size: size, thick: thick, color: color, top: true, left: true)),
-      const Positioned(top: 16, right: 16,
-          child: _Corner(size: size, thick: thick, color: color, top: true, left: false)),
-      const Positioned(bottom: 16, left: 16,
-          child: _Corner(size: size, thick: thick, color: color, top: false, left: true)),
-      const Positioned(bottom: 16, right: 16,
-          child: _Corner(size: size, thick: thick, color: color, top: false, left: false)),
+      const Positioned(
+          top: 16,
+          left: 16,
+          child: _Corner(
+              size: size,
+              thick: thick,
+              color: color,
+              top: true,
+              left: true)),
+      const Positioned(
+          top: 16,
+          right: 16,
+          child: _Corner(
+              size: size,
+              thick: thick,
+              color: color,
+              top: true,
+              left: false)),
+      const Positioned(
+          bottom: 16,
+          left: 16,
+          child: _Corner(
+              size: size,
+              thick: thick,
+              color: color,
+              top: false,
+              left: true)),
+      const Positioned(
+          bottom: 16,
+          right: 16,
+          child: _Corner(
+              size: size,
+              thick: thick,
+              color: color,
+              top: false,
+              left: false)),
     ];
   }
 }
@@ -1259,14 +1415,21 @@ class _Corner extends StatelessWidget {
   final double size, thick;
   final Color color;
   final bool top, left;
-  const _Corner({required this.size, required this.thick, required this.color, required this.top, required this.left});
+  const _Corner(
+      {required this.size,
+      required this.thick,
+      required this.color,
+      required this.top,
+      required this.left});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: size, height: size,
+      width: size,
+      height: size,
       child: CustomPaint(
-          painter: _CornerPainter(color: color, thick: thick, top: top, left: left)),
+          painter: _CornerPainter(
+              color: color, thick: thick, top: top, left: left)),
     );
   }
 }
@@ -1275,16 +1438,29 @@ class _CornerPainter extends CustomPainter {
   final Color color;
   final double thick;
   final bool top, left;
-  _CornerPainter({required this.color, required this.thick, required this.top, required this.left});
+  _CornerPainter(
+      {required this.color,
+      required this.thick,
+      required this.top,
+      required this.left});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color..strokeWidth = thick..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+      ..color = color
+      ..strokeWidth = thick
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
     final x = left ? 0.0 : size.width;
     final y = top ? 0.0 : size.height;
-    canvas.drawLine(Offset(x, y), Offset(x + (left ? 1 : -1) * size.width * 0.6, y), paint);
-    canvas.drawLine(Offset(x, y), Offset(x, y + (top ? 1 : -1) * size.height * 0.6), paint);
+    canvas.drawLine(
+        Offset(x, y),
+        Offset(x + (left ? 1 : -1) * size.width * 0.6, y),
+        paint);
+    canvas.drawLine(
+        Offset(x, y),
+        Offset(x, y + (top ? 1 : -1) * size.height * 0.6),
+        paint);
   }
 
   @override
@@ -1306,11 +1482,14 @@ class _ScanResultBadge extends StatelessWidget {
             : Colors.red;
 
     return Positioned(
-      bottom: 12, left: 12, right: 12,
+      bottom: 12,
+      left: 12,
+      right: 12,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-            color: color.withOpacity(0.92), borderRadius: BorderRadius.circular(12)),
+            color: color.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(12)),
         child: Row(
           children: [
             Text(result.emoji, style: const TextStyle(fontSize: 16)),
@@ -1318,10 +1497,13 @@ class _ScanResultBadge extends StatelessWidget {
             Expanded(
               child: Text(result.label,
                   style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13)),
             ),
             Text('${result.confidencePercent}%',
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 12)),
           ],
         ),
       ),
@@ -1336,24 +1518,33 @@ class _ResultDialog extends StatelessWidget {
   final int points;
   final VoidCallback onDismiss;
 
-  const _ResultDialog({required this.success, required this.points, required this.onDismiss});
+  const _ResultDialog(
+      {required this.success,
+      required this.points,
+      required this.onDismiss});
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 90, height: 90,
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
-                color: success ? Colors.green.withOpacity(0.12) : Colors.red.withOpacity(0.12),
+                color: success
+                    ? Colors.green.withOpacity(0.12)
+                    : Colors.red.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: Center(child: Text(success ? '🎉' : '😔', style: const TextStyle(fontSize: 46))),
+              child: Center(
+                  child: Text(success ? '🎉' : '😔',
+                      style: const TextStyle(fontSize: 46))),
             ),
             const SizedBox(height: 20),
             Text(
@@ -1368,26 +1559,30 @@ class _ResultDialog extends StatelessWidget {
               success
                   ? 'Botolmu berhasil dilaporkan.\nTim kami akan verifikasi dalam 1×24 jam.'
                   : 'Terjadi kesalahan. Coba lagi ya!',
-              style: const TextStyle(color: Colors.grey, fontSize: 13, height: 1.5),
+              style: const TextStyle(
+                  color: Colors.grey, fontSize: 13, height: 1.5),
               textAlign: TextAlign.center,
             ),
             if (success) ...[
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                     color: const Color(0xFF1007BA).withOpacity(0.08),
                     borderRadius: BorderRadius.circular(14)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('⭐', style: TextStyle(fontSize: 24)),
+                    const Text('⭐',
+                        style: TextStyle(fontSize: 24)),
                     const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Estimasi poin',
-                            style: TextStyle(color: Colors.grey, fontSize: 11)),
+                            style: TextStyle(
+                                color: Colors.grey, fontSize: 11)),
                         Text('+$points poin',
                             style: const TextStyle(
                                 color: Color(0xFF1007BA),
@@ -1405,13 +1600,17 @@ class _ResultDialog extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: onDismiss,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: success ? const Color(0xFF1007BA) : Colors.red,
+                  backgroundColor:
+                      success ? const Color(0xFF1007BA) : Colors.red,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: Text(success ? 'Sip, terima kasih! 🌿' : 'Coba Lagi',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                child: Text(
+                    success ? 'Sip, terima kasih! 🌿' : 'Coba Lagi',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 15)),
               ),
             ),
           ],

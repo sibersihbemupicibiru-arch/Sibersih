@@ -12,6 +12,8 @@ import 'services/supabase_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  //debugPrintRebuildDirtyWidgets = true;
+  debugProfileBuildsEnabled = true;
   await Supabase.initialize(
     url: 'https://ciaykezzojnksqlsioqh.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYXlrZXp6b2pua3NxbHNpb3FoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njc1ODA2MiwiZXhwIjoyMDkyMzM0MDYyfQ.glV4UI0HVHc4-id_uzFIeEqTQHuwTakOLbMNj2CnBfw',
@@ -56,14 +58,24 @@ class _SibersihAppState extends State<SibersihApp> {
     Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
       final event = data.event;
       if (event == AuthChangeEvent.signedIn) {
-        // Buat user record di Supabase jika belum ada (Google user baru)
-        await SupabaseService.instance.ensureUserRecord();
+        final user = Supabase.instance.client.auth.currentUser!;
 
-        // Navigate ke home, replace semua route sebelumnya
-        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          '/home',
-          (route) => false,
-        );
+        // Cek apakah profil (nim, nama, jurusan) sudah ada di tabel users
+        final hasProfile = await SupabaseService.instance.isProfileComplete(user.id);
+
+        if (hasProfile) {
+          _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            '/home',
+            (route) => false,
+          );
+        } else {
+          // First-time Google login → isi profil dulu
+          _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            '/register',
+            (route) => false,
+            arguments: user.email,
+          );
+        }
       } else if (event == AuthChangeEvent.signedOut) {
         _navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/landing',
@@ -71,7 +83,7 @@ class _SibersihAppState extends State<SibersihApp> {
         );
       }
     });
-  }
+}
 
   void toggleTheme(bool val) => setState(() => _isDarkMode = val);
 
@@ -109,7 +121,9 @@ class _SibersihAppState extends State<SibersihApp> {
           case '/login':
             return _slide(const LoginPage());
           case '/register':
-            return _slide(const RegisterPage());
+            // ✅ Baca arguments, teruskan ke RegisterPage
+            final email = settings.arguments as String?;
+            return _slide(RegisterPage(googleEmail: email));
           case '/home':
             return _fade(MainPage(
               onToggleTheme: toggleTheme,
