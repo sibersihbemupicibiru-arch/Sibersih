@@ -10,6 +10,7 @@ environment:
 dependencies:
 
   image: ^4.2.0
+  flutter_svg: ^2.0.10+1
   flutter_image_compress: ^2.3.0
   flutter:
     sdk: flutter
@@ -27,6 +28,8 @@ dev_dependencies:
 
 flutter:
   assets:
+    - assets/icons/
+    - assets/logos/
   uses-material-design: true
   # Uncomment to use a custom font (download Nunito from Google Fonts)
   fonts:
@@ -39,5 +42,4 @@ flutter:
            weight: 800
          - asset: assets/fonts/Nunito-Black.ttf
            weight: 900
-  # assets:
-  #   - assets/images/
+

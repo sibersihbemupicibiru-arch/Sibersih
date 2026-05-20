@@ -168,6 +168,20 @@ Future<bool> isProfileComplete(String uid) async {
           _extractError(error, defaultMessage: 'Registrasi gagal'));
     }
   }
+    Future<AuthResult> resendConfirmationEmail({
+    required String email,
+  }) async {
+    try {
+      await _supabase.auth.resend(
+        type: OtpType.signup,
+        email: email,
+      );
+
+      return AuthResult.success();
+    } catch (e) {
+      return AuthResult.error(e.toString());
+    }
+  }
 
   Future<void> logout() async {
     _currentUser = null;
@@ -330,6 +344,8 @@ Future<bool> isProfileComplete(String uid) async {
       return [];
     }
   }
+
+  
 
   /// Cek apakah [newHash] duplikat dengan salah satu hash di [existingHashes].
   /// Threshold hamming distance <= [threshold] dianggap duplikat.
@@ -532,8 +548,27 @@ Future<bool> isProfileComplete(String uid) async {
   }
 
   String _extractError(Object error, {required String defaultMessage}) {
-    if (error is AuthException) return error.message;
-    if (error is PostgrestException) return error.message;
+
+    final msg = error.toString().toLowerCase();
+
+    // Duplicate NIM
+    if (msg.contains('users_nim_key')) {
+      return 'Data yang dimasukkan sudah terdaftar';
+    }
+
+    // Duplicate email
+    if (msg.contains('users_email_key')) {
+      return 'Email sudah digunakan';
+    }
+
+    if (error is AuthException) {
+      return error.message;
+    }
+
+    if (error is PostgrestException) {
+      return error.message;
+    }
+
     return defaultMessage;
   }
 

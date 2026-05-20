@@ -9,6 +9,7 @@ import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/main_page.dart';
 import 'services/supabase_service.dart';
+import 'pages/email_confirmation_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,7 +60,12 @@ class _SibersihAppState extends State<SibersihApp> {
       final event = data.event;
       if (event == AuthChangeEvent.signedIn) {
         final user = Supabase.instance.client.auth.currentUser!;
+        if (user == null) return;
 
+        // 🚨 Kalau email belum verified → jangan redirect ke mana-mana
+        if (user.emailConfirmedAt == null) {
+          return;
+        }
         // Cek apakah profil (nim, nama, jurusan) sudah ada di tabel users
         final hasProfile = await SupabaseService.instance.isProfileComplete(user.id);
 
@@ -124,6 +130,9 @@ class _SibersihAppState extends State<SibersihApp> {
             // ✅ Baca arguments, teruskan ke RegisterPage
             final email = settings.arguments as String?;
             return _slide(RegisterPage(googleEmail: email));
+          case '/email-confirmation':
+            final email = settings.arguments as String;
+            return _slide(EmailConfirmationPage(email: email));
           case '/home':
             return _fade(MainPage(
               onToggleTheme: toggleTheme,
@@ -152,7 +161,7 @@ class _SibersihAppState extends State<SibersihApp> {
           elevation: 0,
           centerTitle: true,
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           color: Colors.white,
@@ -211,7 +220,7 @@ class _SibersihAppState extends State<SibersihApp> {
           elevation: 0,
           centerTitle: true,
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           color: SibersihColors.cardDark,

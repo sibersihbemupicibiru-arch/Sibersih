@@ -83,33 +83,46 @@ class _RegisterPageState extends State<RegisterPage>
 
     setState(() => _isLoading = true);
 
-    AuthResult result;
-
     if (_isGoogleMode) {
-      // User sudah ter-auth via Google, tinggal simpan profil ke tabel users
-      result = await SupabaseService.instance.completeGoogleProfile(
+      // ── Mode Google: user sudah ter-auth, tinggal simpan profil ──
+      final result = await SupabaseService.instance.completeGoogleProfile(
         nama: _nameController.text.trim(),
         nim: _nimController.text.trim(),
         jurusan: _selectedJurusan!,
       );
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (result.success) {
+        // Google mode: langsung ke home karena email sudah terverifikasi Google
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        _showSnack(result.errorMessage ?? 'Gagal menyimpan data. Coba lagi.');
+      }
     } else {
-      // Register manual: buat auth user sekaligus simpan profil
-      result = await SupabaseService.instance.register(
+      // ── Mode Manual: register biasa, tunggu konfirmasi email ──
+      final result = await SupabaseService.instance.register(
         nama: _nameController.text.trim(),
         nim: _nimController.text.trim(),
         jurusan: _selectedJurusan!,
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-    }
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
 
-    if (result.success) {
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
-      _showSnack(result.errorMessage ?? 'Gagal menyimpan data. Coba lagi.');
+      if (result.success) {
+        // FIX: Jangan langsung ke /home — arahkan ke halaman konfirmasi email
+        Navigator.pushReplacementNamed(
+          context,
+          '/email-confirmation',
+          arguments: _emailController.text.trim(),
+        );
+      } else {
+        _showSnack(result.errorMessage ?? 'Gagal mendaftar. Coba lagi.');
+      }
     }
   }
 
@@ -175,7 +188,6 @@ class _RegisterPageState extends State<RegisterPage>
                         ),
                       ),
                       const SizedBox(height: 4),
-                      // ── Judul berubah sesuai mode ──
                       Text(
                         _isGoogleMode ? 'Lengkapi Profil' : 'Buat Akun Baru',
                         style: const TextStyle(
@@ -188,7 +200,6 @@ class _RegisterPageState extends State<RegisterPage>
                             : 'Bergabung dan mulai kumpulkan poin! 🥤',
                         style: const TextStyle(color: Colors.white70, fontSize: 13),
                       ),
-                      // ── Badge Google jika mode Google ──
                       if (_isGoogleMode) ...[
                         const SizedBox(height: 12),
                         Container(
@@ -279,10 +290,10 @@ class _RegisterPageState extends State<RegisterPage>
                                 controller: _emailController,
                                 hint: 'email@kampus.ac.id',
                                 icon: _isGoogleMode
-                                    ? Icons.verified_outlined // ikon penanda email terkunci
+                                    ? Icons.verified_outlined
                                     : Icons.email_outlined,
                                 keyboardType: TextInputType.emailAddress,
-                                enabled: !_isGoogleMode, // ← kunci field jika Google mode
+                                enabled: !_isGoogleMode,
                                 validator: (v) {
                                   if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
                                   if (!v.contains('@')) return 'Format email tidak valid';
@@ -290,7 +301,7 @@ class _RegisterPageState extends State<RegisterPage>
                                 },
                               ),
 
-                              // ── Password section: HANYA tampil jika bukan Google mode ──
+                              // ── Password: HANYA tampil jika bukan Google mode ──
                               if (!_isGoogleMode) ...[
                                 const SizedBox(height: 16),
                                 _label('Kata Sandi'),
@@ -413,7 +424,6 @@ class _RegisterPageState extends State<RegisterPage>
                                           child: CircularProgressIndicator(
                                               color: Colors.white, strokeWidth: 2.5))
                                       : Text(
-                                          // ── Label tombol berubah sesuai mode ──
                                           _isGoogleMode
                                               ? 'Simpan & Mulai'
                                               : 'Daftar Sekarang',
@@ -428,7 +438,6 @@ class _RegisterPageState extends State<RegisterPage>
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // Jika Google mode, tidak perlu link "Sudah punya akun?"
                       if (!_isGoogleMode)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -500,7 +509,7 @@ class _RegisterPageState extends State<RegisterPage>
     required IconData icon,
     TextEditingController? controller,
     bool obscure = false,
-    bool enabled = true,      // ← parameter baru
+    bool enabled = true,
     Widget? suffix,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
@@ -524,7 +533,7 @@ class _RegisterPageState extends State<RegisterPage>
         filled: true,
         fillColor: enabled
             ? const Color(0xFF1007BA).withOpacity(0.05)
-            : Colors.grey.withOpacity(0.08),   // bg redup jika disabled
+            : Colors.grey.withOpacity(0.08),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
