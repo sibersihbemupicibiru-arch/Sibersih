@@ -66,7 +66,7 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   late AnimationController _pulseController;
   // FIX: _successController dihapus — tidak dipakai di build sama sekali.
 
-  static const String _lokasiDefault = 'Gedung B lt 1';
+  static const String _lokasiDefault = 'Samping Ruang Sekre Bersama';
 
   // ─── Image helpers ───────────────────────────────────────
 
