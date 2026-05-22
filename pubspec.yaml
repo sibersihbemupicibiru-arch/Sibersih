@@ -1,0 +1,40 @@
+name: sibersih
+description: Platform pelaporan sampah kampus dengan sistem poin reward.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  image_picker: ^1.1.0
+  supabase_flutter: ^1.9.0
+  http: ^1.0.0
+  http_parser: ^4.0.0
+  image: ^4.1.7           # untuk preprocessing gambar di mobile  
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  assets:
+  uses-material-design: true
+  # Uncomment to use a custom font (download Nunito from Google Fonts)
+  fonts:
+     - family: Nunito
+       fonts:
+         - asset: assets/fonts/Nunito-Regular.ttf
+         - asset: assets/fonts/Nunito-Bold.ttf
+           weight: 700
+         - asset: assets/fonts/Nunito-ExtraBold.ttf
+           weight: 800
+         - asset: assets/fonts/Nunito-Black.ttf
+           weight: 900
+  # assets:
+  #   - assets/images/
