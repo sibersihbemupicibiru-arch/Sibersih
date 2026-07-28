@@ -1,0 +1,1 @@
+INSERT INTO "public"."quotes" ("id", "text", "author", "order") VALUES (1, 'Assalamu''alaikum Testing 123', 'Naufal', 1);

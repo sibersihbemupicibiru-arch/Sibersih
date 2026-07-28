@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/app_config.dart';
 
 enum BottleType { plasticBottle, glassBottle, unknown }
 
@@ -64,7 +65,7 @@ class AiScanService {
       final response = await http
           .post(
             Uri.parse(
-              'https://ciaykezzojnksqlsioqh.supabase.co/functions/v1/gemini-scan',
+              '${AppConfig.supabaseUrl}/functions/v1/${AppConfig.geminiScanFunction}',
             ),
             headers: {
               'Content-Type': 'application/json',
@@ -117,7 +118,6 @@ Balas JSON saja tanpa teks tambahan.
       }
 
       final responseData = jsonDecode(response.body);
-
       final text =
           responseData['candidates'][0]['content']['parts'][0]['text'];
 
@@ -128,19 +128,12 @@ Balas JSON saja tanpa teks tambahan.
           .trim();
 
       final result = jsonDecode(cleaned);
-
       final type = result['type'];
-
       final confidence =
           (result['confidence'] as num?)?.toDouble() ?? 0.0;
 
-      if (type == 'plastic') {
-        return AiScanResult.plasticBottle(confidence);
-      }
-
-      if (type == 'glass') {
-        return AiScanResult.glassBottle(confidence);
-      }
+      if (type == 'plastic') return AiScanResult.plasticBottle(confidence);
+      if (type == 'glass') return AiScanResult.glassBottle(confidence);
 
       return AiScanResult.noBottleFound();
     } catch (e) {

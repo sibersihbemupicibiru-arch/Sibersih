@@ -17,6 +17,8 @@ class LaporanModel {
   final int poinDiterima;
   final StatusLaporan status;
   final DateTime tanggal;
+  final String kategori;
+  final String ukuran;
 
   const LaporanModel({
     required this.id,
@@ -30,6 +32,8 @@ class LaporanModel {
     required this.poinDiterima,
     required this.status,
     required this.tanggal,
+    this.kategori = 'plastik',
+    this.ukuran = 'sedang',
   });
 
   // TODO: Uncomment saat Firebase sudah diintegrasikan
@@ -56,6 +60,8 @@ class LaporanModel {
       tanggal: data['tanggal'] != null
           ? DateTime.tryParse(data['tanggal'] as String) ?? DateTime.now()
           : DateTime.now(),
+      kategori: data['kategori'] as String? ?? 'plastik',
+      ukuran: data['ukuran'] as String? ?? 'sedang',
     );
   }
 
@@ -70,6 +76,8 @@ class LaporanModel {
         'poin_diterima': poinDiterima,
         'status': status.name,
         'tanggal': tanggal.toIso8601String(),
+        'kategori': kategori,
+        'ukuran': ukuran,
       };
 
   String get beratFormatted {

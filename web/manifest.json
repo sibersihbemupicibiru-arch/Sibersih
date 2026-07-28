@@ -1,11 +1,11 @@
 {
-    "name": "sibersih",
-    "short_name": "sibersih",
+    "name": "Sibersih",
+    "short_name": "Sibersih",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1007BA",
+    "theme_color": "#1007BA",
+    "description": "Platform pelaporan sampah kampus BEM UPI Cibiru dengan sistem poin reward.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
