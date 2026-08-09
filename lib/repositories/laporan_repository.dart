@@ -168,7 +168,7 @@ class LaporanRepository {
       final urls = <String>[];
       for (final bytes in fotoBytes) {
         final path =
-            '${AppConfig.bucketLaporanPhotos}/${authUser.id}/${DateTime.now().microsecondsSinceEpoch}.jpg';
+            '${authUser.id}/${DateTime.now().microsecondsSinceEpoch}.jpg';
         await _supabase.storage
             .from(AppConfig.bucketLaporanPhotos)
             .uploadBinary(path, bytes);

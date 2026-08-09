@@ -1,5 +1,5 @@
-import 'dart:typed_data';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
@@ -137,7 +137,7 @@ Balas JSON saja tanpa teks tambahan.
 
       return AiScanResult.noBottleFound();
     } catch (e) {
-      print('AI Scan Error: $e');
+      debugPrint('AI Scan Error: $e');
       return AiScanResult.noBottleFound();
     }
   }

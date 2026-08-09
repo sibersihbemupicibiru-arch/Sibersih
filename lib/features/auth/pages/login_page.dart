@@ -236,7 +236,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 Align(
                                   alignment: Alignment.centerRight,
                                   child: TextButton(
-                                    onPressed: () {},
+                                    onPressed: () => Navigator.pushNamed(
+                                        context, '/forgot-password'),
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       tapTargetSize:
@@ -477,7 +478,6 @@ class _LoginBgPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
     // Top section: blue gradient header
     final headerRect = Rect.fromLTWH(0, 0, size.width, size.height * 0.42);
     canvas.drawRect(

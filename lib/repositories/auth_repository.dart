@@ -41,6 +41,9 @@ class AuthRepository {
   Future<AuthResult> login(String emailOrNim, String password) async {
     try {
       final email = await _resolveEmail(emailOrNim.trim());
+      if (email == null) {
+        return AuthResult.error('Akun dengan NIM tersebut tidak ditemukan');
+      }
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -77,17 +80,34 @@ class AuthRepository {
     required String password,
   }) async {
     try {
+      final trimmedEmail = email.trim();
+      final trimmedNim = nim.trim();
+
+      // Cek apakah NIM atau Email sudah terdaftar di database
+      final existingUser = await _supabase
+          .from('users')
+          .select('email, nim')
+          .or('email.eq.$trimmedEmail,nim.eq.$trimmedNim')
+          .maybeSingle();
+
+      if (existingUser != null) {
+        if (existingUser['nim'] == trimmedNim) {
+          return AuthResult.error('NIM sudah terdaftar');
+        }
+        return AuthResult.error('Email sudah terdaftar');
+      }
+
       final authResult =
-          await _supabase.auth.signUp(email: email.trim(), password: password);
+          await _supabase.auth.signUp(email: trimmedEmail, password: password);
       final user = authResult.user;
       if (user == null) return AuthResult.error('Registrasi gagal');
 
       final newUser = UserModel(
         uid: user.id,
         nama: nama,
-        nim: nim,
+        nim: trimmedNim,
         jurusan: jurusan,
-        email: email.trim(),
+        email: trimmedEmail,
         totalPoin: 0,
         poinMasuk: 0,
         poinKeluar: 0,
@@ -137,6 +157,34 @@ class AuthRepository {
     await _supabase.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  Future<AuthResult> sendPasswordResetEmail(String email) async {
+    try {
+      final emailResolved = await _resolveEmail(email.trim());
+      if (emailResolved == null) {
+        return AuthResult.error('Akun dengan NIM/Email tersebut tidak ditemukan');
+      }
+      final redirectTo = kIsWeb
+          ? Uri.base.origin
+          : 'com.sibersih.app://login-callback';
+      await _supabase.auth.resetPasswordForEmail(
+        emailResolved,
+        redirectTo: redirectTo,
+      );
+      return AuthResult.success();
+    } catch (e) {
+      return AuthResult.error(_extractError(e, defaultMessage: 'Gagal mengirim email reset kata sandi'));
+    }
+  }
+
+  Future<AuthResult> resetPassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+      return AuthResult.success();
+    } catch (e) {
+      return AuthResult.error(_extractError(e, defaultMessage: 'Gagal memperbarui kata sandi'));
+    }
+  }
+
   // -----------------------------------------------------------
   //  GOOGLE PROFILE COMPLETION
   // -----------------------------------------------------------
@@ -150,7 +198,7 @@ class AuthRepository {
       final authUser = _supabase.auth.currentUser!;
       final meta = authUser.userMetadata ?? {};
 
-      await _supabase.from('users').insert({
+      await _supabase.from('users').upsert({
         'id'            : authUser.id,
         'nama'          : nama,
         'nim'           : nim,
@@ -163,7 +211,7 @@ class AuthRepository {
         'jumlah_laporan': 0,
         'level'         : 'Pemula',
         'foto_url'      : meta['avatar_url'] as String?,
-      });
+      }, onConflict: 'id');
 
       _currentUser = await _fetchUser(authUser.id);
       return AuthResult.success();
@@ -199,7 +247,7 @@ class AuthRepository {
           authUser.email?.split('@').first ??
           'User';
 
-      await _supabase.from('users').insert({
+      await _supabase.from('users').upsert({
         'id'            : authUser.id,
         'nama'          : nama,
         'nim'           : '',
@@ -212,7 +260,7 @@ class AuthRepository {
         'jumlah_laporan': 0,
         'level'         : 'Pemula',
         'foto_url'      : meta['avatar_url'] as String?,
-      });
+      }, onConflict: 'id');
     }
 
     _currentUser = await _fetchUser(authUser.id);
@@ -241,9 +289,28 @@ class AuthRepository {
           .select('email')
           .eq('nim', emailOrNim)
           .maybeSingle();
-      return data?['email'] ?? emailOrNim;
+
+      if (data != null && data['email'] != null && (data['email'] as String).isNotEmpty) {
+        return data['email'] as String;
+      }
+
+      // Fallback: Panggil RPC jika RLS memblokir query publik
+      try {
+        final rpcRes = await _supabase.rpc('get_email_by_nim', params: {'p_nim': emailOrNim});
+        if (rpcRes != null && rpcRes.toString().isNotEmpty) {
+          return rpcRes.toString();
+        }
+      } catch (_) {}
+
+      return null;
     } catch (e) {
-      return emailOrNim;
+      try {
+        final rpcRes = await _supabase.rpc('get_email_by_nim', params: {'p_nim': emailOrNim});
+        if (rpcRes != null && rpcRes.toString().isNotEmpty) {
+          return rpcRes.toString();
+        }
+      } catch (_) {}
+      return null;
     }
   }
 
@@ -251,13 +318,34 @@ class AuthRepository {
     final msg = error.toString().toLowerCase();
 
     if (msg.contains('users_nim_key')) {
-      return 'Data yang dimasukkan sudah terdaftar';
+      return 'NIM sudah terdaftar';
     }
-    if (msg.contains('users_email_key')) {
-      return 'Email sudah digunakan';
+    if (msg.contains('users_email_key') ||
+        msg.contains('user already registered') ||
+        msg.contains('already registered') ||
+        msg.contains('email_exists')) {
+      return 'Email sudah terdaftar';
     }
-    if (error is AuthException) return error.message;
-    if (error is PostgrestException) return error.message;
+    if (msg.contains('users_pkey') ||
+        msg.contains('23505') ||
+        msg.contains('duplicate key')) {
+      return 'Akun sudah terdaftar';
+    }
+    if (error is AuthException) {
+      if (error.message.toLowerCase().contains('already registered') ||
+          error.statusCode == '422') {
+        return 'Email sudah terdaftar';
+      }
+      return error.message;
+    }
+    if (error is PostgrestException) {
+      if (error.code == '23505') {
+        if (error.message.contains('users_nim_key')) return 'NIM sudah terdaftar';
+        if (error.message.contains('users_email_key')) return 'Email sudah terdaftar';
+        return 'Data sudah terdaftar';
+      }
+      return error.message;
+    }
 
     return defaultMessage;
   }

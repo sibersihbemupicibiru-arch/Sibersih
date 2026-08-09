@@ -278,7 +278,7 @@ class _RegisterPageState extends State<RegisterPage>
                               const SizedBox(height: 16),
 
                               // ── Email: disabled & prefilled jika Google mode ──
-                              _label('Email Kampus'),
+                              _label('Email'),
                               const SizedBox(height: 8),
                               _field(
                                 controller: _emailController,

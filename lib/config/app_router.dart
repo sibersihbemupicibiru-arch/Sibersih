@@ -10,6 +10,8 @@ import '../features/auth/pages/landing_page.dart';
 import '../features/auth/pages/login_page.dart';
 import '../features/auth/pages/register_page.dart';
 import '../features/auth/pages/email_confirmation_page.dart';
+import '../features/auth/pages/forgot_password_page.dart';
+import '../features/auth/pages/reset_password_page.dart';
 import '../features/dashboard/pages/main_page.dart';
 
 // Admin pages
@@ -41,6 +43,10 @@ abstract final class AppRouter {
       case '/email-confirmation':
         final email = settings.arguments as String;
         return _slide(EmailConfirmationPage(email: email));
+      case '/forgot-password':
+        return _slide(const ForgotPasswordPage());
+      case '/reset-password':
+        return _slide(const ResetPasswordPage());
       case '/home':
         return _fade(MainPage(
           onToggleTheme: onToggleTheme,

@@ -98,6 +98,11 @@ class _SibersihAppState extends State<SibersihApp> {
             arguments: user.email,
           );
         }
+      } else if (event == AuthChangeEvent.passwordRecovery) {
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/reset-password',
+          (route) => false,
+        );
       } else if (event == AuthChangeEvent.signedOut) {
         _navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/landing',

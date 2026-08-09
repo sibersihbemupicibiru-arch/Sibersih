@@ -167,29 +167,38 @@ class _DashboardPageState extends State<DashboardPage>
       extendBodyBehindAppBar: true,
       body: _loading
           ? _buildSkeleton()
-          : CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                _buildHeader(),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildPointsCard(),
-                      const SizedBox(height: 18),
-                      _buildMenuGrid(),
-                      const SizedBox(height: 20),
-                      _buildRankCard(),
-                      const SizedBox(height: 20),
-                      _buildQuotesCard(),
-                      const SizedBox(height: 20),
-                      _buildHowItWorks(),
-                      const SizedBox(height: 20),
-                      _buildRecentActivity(),
-                    ]),
-                  ),
+          : RefreshIndicator(
+              onRefresh: () async {
+                UserRepository.instance.invalidateCache();
+                await _loadData();
+              },
+              color: SibersihColors.primary,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
                 ),
-              ],
+                slivers: [
+                  _buildHeader(),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildPointsCard(),
+                        const SizedBox(height: 18),
+                        _buildMenuGrid(),
+                        const SizedBox(height: 20),
+                        _buildRankCard(),
+                        const SizedBox(height: 20),
+                        _buildQuotesCard(),
+                        const SizedBox(height: 20),
+                        _buildHowItWorks(),
+                        const SizedBox(height: 20),
+                        _buildRecentActivity(),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }
@@ -788,123 +797,338 @@ class _DashboardPageState extends State<DashboardPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final rankColor = _levelColor(user.level);
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? SibersihColors.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(SibersihRadius.xl),
-        boxShadow: SibersihColors.cardShadow,
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : SibersihColors.primary.withValues(alpha: 0.06),
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        _showLeaderboardSheet();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark ? SibersihColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(SibersihRadius.xl),
+          boxShadow: SibersihColors.cardShadow,
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : SibersihColors.primary.withValues(alpha: 0.06),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          // Trophy with pulse
-          RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _rankPulseController,
-              child: Container(
-                width: 62,
-                height: 62,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFFFFCC00), Color(0xFFFF8C00)],
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                    child: Text('🏆', style: TextStyle(fontSize: 28))),
-              ),
-              builder: (_, child) => Transform.scale(
-                scale: 1.0 + _rankPulseController.value * 0.06,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
+        child: Row(
+          children: [
+            // Trophy with pulse
+            RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _rankPulseController,
+                child: Container(
+                  width: 62,
+                  height: 62,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFFCC00), Color(0xFFFF8C00)],
+                    ),
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.amber.withValues(
-                            alpha: 0.35 + _rankPulseController.value * 0.2),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      ),
-                    ],
                   ),
-                  child: child,
+                  child: const Center(
+                      child: Text('🏆', style: TextStyle(fontSize: 28))),
+                ),
+                builder: (_, child) => Transform.scale(
+                  scale: 1.0 + _rankPulseController.value * 0.06,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.amber.withValues(
+                              alpha: 0.35 + _rankPulseController.value * 0.2),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: child,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Peringkat Kamu',
-                  style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '#$_userRank dari $_totalUsers mahasiswa',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 15.5),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(SibersihRadius.pill),
-                  child: LinearProgressIndicator(
-                    value: _totalUsers > 0
-                        ? (_totalUsers - _userRank + 1) / _totalUsers
-                        : 1.0,
-                    minHeight: 7,
-                    backgroundColor: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.grey.shade100,
-                    valueColor: const AlwaysStoppedAnimation(
-                        SibersihColors.primary),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Peringkat Kamu',
+                    style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Level badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  rankColor.withValues(alpha: 0.18),
-                  rankColor.withValues(alpha: 0.08),
+                  const SizedBox(height: 2),
+                  Text(
+                    '#$_userRank dari $_totalUsers mahasiswa',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 15.5),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(SibersihRadius.pill),
+                    child: LinearProgressIndicator(
+                      value: _totalUsers > 0
+                          ? (_totalUsers - _userRank + 1) / _totalUsers
+                          : 1.0,
+                      minHeight: 7,
+                      backgroundColor: isDark
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : Colors.grey.shade100,
+                      valueColor: const AlwaysStoppedAnimation(
+                          SibersihColors.primary),
+                    ),
+                  ),
                 ],
               ),
-              borderRadius: BorderRadius.circular(SibersihRadius.sm),
-              border: Border.all(color: rankColor.withValues(alpha: 0.4)),
             ),
-            child: Column(
-              children: [
-                Text(_levelEmoji(user.level),
-                    style: const TextStyle(fontSize: 20)),
-                const SizedBox(height: 2),
-                Text(
-                  user.level,
-                  style: TextStyle(
-                      color: rankColor,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10.5),
+            const SizedBox(width: 12),
+            // Level badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    rankColor.withValues(alpha: 0.18),
+                    rankColor.withValues(alpha: 0.08),
+                  ],
                 ),
-              ],
+                borderRadius: BorderRadius.circular(SibersihRadius.sm),
+                border: Border.all(color: rankColor.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                children: [
+                  Text(_levelEmoji(user.level),
+                      style: const TextStyle(fontSize: 20)),
+                  const SizedBox(height: 2),
+                  Text(
+                    user.level,
+                    style: TextStyle(
+                        color: rankColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10.5),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLeaderboardSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
+      ),
+      builder: (_) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? SibersihColors.cardDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '🏆 Leaderboard 10 Besar',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Mahasiswa paling aktif menjaga kebersihan UPI Cibiru',
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: UserRepository.instance.getLeaderboard(limit: 10),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: SibersihColors.primary),
+                    );
+                  }
+                  if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('😔', style: TextStyle(fontSize: 32)),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Gagal memuat peringkat',
+                            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final list = snapshot.data!;
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: list.length,
+                    itemBuilder: (context, index) {
+                      final item = list[index];
+                      final name = item['nama'] as String? ?? 'User';
+                      final points = (item['total_poin'] as num? ?? 0).toInt();
+                      final fotoUrl = item['foto_url'] as String?;
+                      final level = item['level'] as String? ?? 'Pemula';
+                      final uid = item['id'] as String?;
+                      
+                      final isCurrentUser = uid == _user?.uid;
+                      final rank = index + 1;
+
+                      String rankBadge = '';
+                      if (rank == 1) {
+                        rankBadge = '🥇';
+                      } else if (rank == 2) {
+                        rankBadge = '🥈';
+                      } else if (rank == 3) {
+                        rankBadge = '🥉';
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isCurrentUser
+                              ? SibersihColors.primary.withValues(alpha: 0.08)
+                              : (isDark ? Colors.white.withValues(alpha: 0.02) : Colors.grey.shade50),
+                          borderRadius: BorderRadius.circular(SibersihRadius.md),
+                          border: Border.all(
+                            color: isCurrentUser
+                                ? SibersihColors.primary.withValues(alpha: 0.3)
+                                : Colors.transparent,
+                            width: 1,
+                          ),
+                        ),
+                        child: ListTile(
+                          leading: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 32,
+                                alignment: Alignment.center,
+                                child: rankBadge.isNotEmpty
+                                    ? Text(rankBadge, style: const TextStyle(fontSize: 20))
+                                    : Text(
+                                        '#$rank',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                              ),
+                              const SizedBox(width: 8),
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: SibersihColors.primary.withValues(alpha: 0.1),
+                                backgroundImage: fotoUrl != null && fotoUrl.isNotEmpty
+                                    ? NetworkImage(fotoUrl)
+                                    : null,
+                                child: fotoUrl == null || fotoUrl.isEmpty
+                                    ? const Text('🙋', style: TextStyle(fontSize: 16))
+                                    : null,
+                              ),
+                            ],
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: TextStyle(
+                                    fontWeight: isCurrentUser ? FontWeight.w900 : FontWeight.w700,
+                                    fontSize: 13.5,
+                                    color: isCurrentUser ? SibersihColors.primary : null,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isCurrentUser) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: SibersihColors.primary,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'Kamu',
+                                    style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(
+                            level,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isCurrentUser
+                                  ? SibersihColors.primary.withValues(alpha: 0.15)
+                                  : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(SibersihRadius.sm),
+                            ),
+                            child: Text(
+                              '⭐ $points pts',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: isCurrentUser ? SibersihColors.primary : (isDark ? Colors.white70 : Colors.black87),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }
@@ -1141,9 +1365,6 @@ class _DashboardPageState extends State<DashboardPage>
       ),
     );
   }
-
-  // kept for backward compat
-  Widget _buildStep(_Step step) => _buildStepCard(step, false);
 
   // ─── Recent activity ─────────────────────────────────────
 
@@ -1382,7 +1603,9 @@ class _HoverCardState extends State<_HoverCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
         transform: Matrix4.identity()
+          // ignore: deprecated_member_use
           ..scale(_pressed ? 0.94 : 1.0)
+          // ignore: deprecated_member_use
           ..translate(_pressed ? 1.0 : 0.0, _pressed ? 1.0 : 0.0),
         decoration: BoxDecoration(
           color: isDark ? SibersihColors.cardDark : Colors.white,

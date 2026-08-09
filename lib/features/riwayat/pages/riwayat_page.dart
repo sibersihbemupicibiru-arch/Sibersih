@@ -106,8 +106,13 @@ class _RiwayatPageState extends State<RiwayatPage>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      body: NestedScrollView(
-        physics: const BouncingScrollPhysics(),
+      body: RefreshIndicator(
+        onRefresh: () async => _loadData(),
+        color: SibersihColors.primary,
+        child: NestedScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
         headerSliverBuilder: (_, __) => [
           SliverAppBar(
             title: const Text(
@@ -231,8 +236,9 @@ class _RiwayatPageState extends State<RiwayatPage>
                     ),
                   ),
                 ],
-              ),
-      ),
+               ),
+            ),
+          ),
     );
   }
 

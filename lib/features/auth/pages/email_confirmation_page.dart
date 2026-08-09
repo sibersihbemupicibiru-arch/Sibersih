@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../repositories/auth_repository.dart';
 
@@ -26,7 +26,6 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage>
   late Animation<Offset> _slideAnim;
 
   bool _isResending = false;
-  bool _resentSuccess = false;
   int _resendCooldown = 0; // detik cooldown sebelum boleh kirim ulang
 
   @override
@@ -55,7 +54,6 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage>
 
     setState(() {
       _isResending = true;
-      _resentSuccess = false;
     });
 
     final result = await AuthRepository.instance.resendConfirmationEmail(
@@ -65,7 +63,6 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage>
     if (!mounted) return;
     setState(() {
       _isResending = false;
-      _resentSuccess = result.success;
     });
 
     if (result.success) {

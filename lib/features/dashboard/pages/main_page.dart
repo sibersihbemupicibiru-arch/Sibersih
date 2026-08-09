@@ -7,6 +7,7 @@ import '../../riwayat/pages/riwayat_page.dart';
 import '../../profil/pages/profil_page.dart';
 import '../../panduan/pages/panduan_page.dart';
 import '../../../core/app_tokens.dart';
+import '../../../widgets/connectivity_banner.dart';
 
 class MainPage extends StatefulWidget {
   final void Function(bool) onToggleTheme;
@@ -61,22 +62,24 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-          child: SlideTransition(
-            position: Tween<Offset>(
-                    begin: const Offset(0, 0.025), end: Offset.zero)
-                .animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
-            child: child,
+      body: ConnectivityBanner(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                      begin: const Offset(0, 0.025), end: Offset.zero)
+                  .animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
+              child: child,
+            ),
           ),
-        ),
-        child: KeyedSubtree(
-          key: ValueKey(_selectedIndex),
-          child: _pages[_selectedIndex],
+          child: KeyedSubtree(
+            key: ValueKey(_selectedIndex),
+            child: _pages[_selectedIndex],
+          ),
         ),
       ),
       bottomNavigationBar: _buildBottomNav(),

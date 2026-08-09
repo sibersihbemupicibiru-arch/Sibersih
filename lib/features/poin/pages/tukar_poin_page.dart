@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../models/user_model.dart';
 import '../../../repositories/poin_repository.dart';
 import '../../../repositories/user_repository.dart';
 
@@ -20,12 +21,18 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
     try {
-      final user = await UserRepository.instance.getCurrentUser();
-      final dbRewards = await PoinRepository.instance.getRewardItems();
-      
+      // Paralel: getCurrentUser dan getRewardItems tidak saling bergantung
+      final results = await Future.wait([
+        UserRepository.instance.getCurrentUser(forceRefresh: forceRefresh),
+        PoinRepository.instance.getRewardItems(),
+      ]);
+
+      final user = results[0] as UserModel;
+      final dbRewards = results[1] as List<Map<String, dynamic>>;
+
       setState(() {
         _currentPoin = user.totalPoin;
         _rewards = dbRewards;
@@ -79,8 +86,14 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF1007BA)))
-          : SingleChildScrollView(
-              child: Padding(
+          : RefreshIndicator(
+              onRefresh: () async => _loadData(),
+              color: const Color(0xFF1007BA),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,11 +146,11 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
                             .map((reward) => _buildRewardCard(reward))
                             .toList(),
                       ),
-                    const SizedBox(height: 32),
                   ],
                 ),
               ),
             ),
+          ),
     );
   }
 
@@ -791,14 +804,10 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
   Future<void> _processRedemption(Map<String, dynamic> reward) async {
     setState(() => _isLoading = true);
 
-    final points = (reward['poin'] as num? ?? reward['points'] as num? ?? 0).toInt();
-    final name = reward['name'] as String? ?? reward['title'] as String? ?? 'Reward';
-    final icon = reward['icon'] as String? ?? '🎁';
+    final rewardId = reward['id'] as int;
 
     final success = await PoinRepository.instance.redeemReward(
-      points: points,
-      title: name.replaceAll('\n', ' '),
-      icon: icon,
+      rewardId: rewardId,
     );
 
     if (!mounted) return;
@@ -839,7 +848,7 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  name,
+                  reward['name'] as String? ?? 'Reward',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -908,7 +917,7 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      _loadData(); // Reload points on successful redemption completion
+                      _loadData(forceRefresh: true); // Reload points on successful redemption completion
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
