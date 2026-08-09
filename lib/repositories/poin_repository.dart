@@ -117,7 +117,7 @@ class PoinRepository {
     try {
       final List<dynamic> data = await _supabase
           .from('reward_items')
-          .select('id, name, icon, description, image_url, points, pickup_location, pickup_time')
+          .select()
           .order('points');
       return List<Map<String, dynamic>>.from(data);
     } catch (e, stackTrace) {

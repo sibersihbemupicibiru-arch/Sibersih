@@ -27,7 +27,8 @@ class _ProfilPageState extends State<ProfilPage>
   bool _isUploadingPhoto = false;
   UserModel? _user;
   bool _loading = true;
-  String? _localPhotoPath; // Local photo bytes URL after upload
+  // ignore: unused_field
+  String? _localPhotoPath;
 
   static const List<String> _jurusanList = [
     'Teknik Komputer',
@@ -683,8 +684,13 @@ class _ProfilPageState extends State<ProfilPage>
           ),
         ),
       ),
-      _divLine(),
-      _navTile(Icons.verified_outlined, 'Versi Aplikasi', '1.0.0', Colors.grey),
+      _navTile(
+        Icons.verified_outlined,
+        'Versi Aplikasi',
+        '1.0.0',
+        Colors.grey,
+        onTap: _showChangelogDialog,
+      ),
     ]);
   }
 
@@ -771,9 +777,9 @@ class _ProfilPageState extends State<ProfilPage>
   }
 
   Future<void> _launchGmail() async {
-    final email = 'sibersihbemcibiru@gmail.com';
-    final subject = 'Tanya Sibersih';
-    final body = 'Halo Admin Sibersih...';
+    const email = 'sibersihbemcibiru@gmail.com';
+    const subject = 'Tanya Sibersih';
+    const body = 'Halo Admin Sibersih...';
 
     // Gmail Web Compose URL (fallback untuk Desktop/Web/emulator tanpa mail client)
     final webGmailUrl = Uri(
@@ -1027,11 +1033,11 @@ class _ProfilPageState extends State<ProfilPage>
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
       subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-      trailing: Switch.adaptive(value: value, onChanged: onChanged, activeColor: SibersihColors.primary),
+      trailing: Switch.adaptive(value: value, onChanged: onChanged, activeThumbColor: SibersihColors.primary),
     );
   }
 
-  Widget _navTile(IconData icon, String title, String? value, Color color) {
+  Widget _navTile(IconData icon, String title, String? value, Color color, {VoidCallback? onTap}) {
     return ListTile(
       leading: Container(
         width: 38,
@@ -1049,7 +1055,165 @@ class _ProfilPageState extends State<ProfilPage>
           const Icon(Icons.chevron_right_rounded, color: Colors.grey),
         ],
       ),
-      onTap: () {},
+      onTap: onTap != null
+          ? () {
+              HapticFeedback.lightImpact();
+              onTap();
+            }
+          : () {},
+    );
+  }
+
+  void _showChangelogDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SibersihRadius.lg),
+        ),
+        backgroundColor: isDark ? SibersihColors.surfaceDark : Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: SibersihColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(SibersihRadius.md),
+                    ),
+                    child: const Icon(
+                      Icons.verified_outlined,
+                      color: SibersihColors.primary,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Catatan Rilis',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: SibersihColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(SibersihRadius.xs),
+                          ),
+                          child: const Text(
+                            'Versi 1.0.0 (Terbaru)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: SibersihColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              
+              // Content list
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.45,
+                ),
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildChangelogSection(
+                        title: 'Sibersih Versi 1.0.0',
+                        items: const [
+                          'Pelaporan Sampah Kampus dengan integrasi AI Scan ',
+                          'Sistem Poin & Penukaran Reward eksklusif mahasiswa.',
+                          'Sistem Otentikasi Supabase & Proteksi NIM/Email terdaftar.',
+                          'Semua Baru, Karena Baru Rilis',
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SibersihColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(SibersihRadius.sm),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Tutup',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChangelogSection({required String title, required List<String> items}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+        ),
+        const SizedBox(height: 8),
+        ...items.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 6, left: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('• ', style: TextStyle(fontWeight: FontWeight.bold, color: SibersihColors.primary)),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: isDark ? Colors.grey.shade300 : Colors.black87,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )),
+      ],
     );
   }
 
@@ -1115,7 +1279,7 @@ class _ProfilPageState extends State<ProfilPage>
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: selected,
+                initialValue: selected,
                 onChanged: (val) => setDialogState(() => selected = val),
                 decoration: InputDecoration(
                   hintText: 'Pilih jurusan',

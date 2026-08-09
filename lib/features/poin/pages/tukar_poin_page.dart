@@ -86,8 +86,14 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF1007BA)))
-          : SingleChildScrollView(
-              child: Padding(
+          : RefreshIndicator(
+              onRefresh: () async => _loadData(),
+              color: const Color(0xFF1007BA),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,11 +146,11 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
                             .map((reward) => _buildRewardCard(reward))
                             .toList(),
                       ),
-                    const SizedBox(height: 32),
                   ],
                 ),
               ),
             ),
+          ),
     );
   }
 

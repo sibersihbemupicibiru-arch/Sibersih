@@ -550,6 +550,7 @@ class _LandingPageState extends State<LandingPage>
       'assets/logos/upi.svg',
       'assets/logos/bem.svg',
       'assets/logos/arunika.svg',
+      'assets/logos/pengabdian.svg',
     ];
 
     return Column(

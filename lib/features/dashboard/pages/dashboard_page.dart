@@ -167,29 +167,38 @@ class _DashboardPageState extends State<DashboardPage>
       extendBodyBehindAppBar: true,
       body: _loading
           ? _buildSkeleton()
-          : CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                _buildHeader(),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildPointsCard(),
-                      const SizedBox(height: 18),
-                      _buildMenuGrid(),
-                      const SizedBox(height: 20),
-                      _buildRankCard(),
-                      const SizedBox(height: 20),
-                      _buildQuotesCard(),
-                      const SizedBox(height: 20),
-                      _buildHowItWorks(),
-                      const SizedBox(height: 20),
-                      _buildRecentActivity(),
-                    ]),
-                  ),
+          : RefreshIndicator(
+              onRefresh: () async {
+                UserRepository.instance.invalidateCache();
+                await _loadData();
+              },
+              color: SibersihColors.primary,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
                 ),
-              ],
+                slivers: [
+                  _buildHeader(),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildPointsCard(),
+                        const SizedBox(height: 18),
+                        _buildMenuGrid(),
+                        const SizedBox(height: 20),
+                        _buildRankCard(),
+                        const SizedBox(height: 20),
+                        _buildQuotesCard(),
+                        const SizedBox(height: 20),
+                        _buildHowItWorks(),
+                        const SizedBox(height: 20),
+                        _buildRecentActivity(),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }
@@ -1357,9 +1366,6 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // kept for backward compat
-  Widget _buildStep(_Step step) => _buildStepCard(step, false);
-
   // ─── Recent activity ─────────────────────────────────────
 
   Widget _buildRecentActivity() {
@@ -1597,7 +1603,9 @@ class _HoverCardState extends State<_HoverCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
         transform: Matrix4.identity()
+          // ignore: deprecated_member_use
           ..scale(_pressed ? 0.94 : 1.0)
+          // ignore: deprecated_member_use
           ..translate(_pressed ? 1.0 : 0.0, _pressed ? 1.0 : 0.0),
         decoration: BoxDecoration(
           color: isDark ? SibersihColors.cardDark : Colors.white,

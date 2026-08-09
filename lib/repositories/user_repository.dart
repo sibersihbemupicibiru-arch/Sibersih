@@ -75,7 +75,7 @@ class UserRepository {
     if (authUser == null) return null;
 
     final path =
-        'profile_photos/${authUser.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        '${authUser.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
     try {
       await _supabase.storage.from('profile_photos').uploadBinary(
             path,
