@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/app_config.dart';
 
 enum BottleType { plasticBottle, glassBottle, unknown }
 
@@ -52,43 +53,91 @@ class AiScanResult {
 
 class AiScanService {
   AiScanService._();
-
-  // Ganti dengan URL HF Space-mu setelah deploy
-  static const _baseUrl = 'https://ssemperor-sibersihai.hf.space';
-
-  static Future<void> preload() async {} // tidak perlu preload lagi
+  static Future<void> preload() async {}
 
   static Future<AiScanResult> analyzeImage(
     Uint8List bytes, {
     String? sourceName,
   }) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$_baseUrl/classify'),
-      );
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        bytes,
-        filename: sourceName ?? 'image.jpg',
-        contentType: MediaType('image', 'jpeg'), // ← tambah ini
-      ));
+      final base64Image = base64Encode(bytes);
+      final session = Supabase.instance.client.auth.currentSession;
+      final response = await http
+          .post(
+            Uri.parse(
+              '${AppConfig.supabaseUrl}/functions/v1/${AppConfig.geminiScanFunction}',
+            ),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${session?.accessToken}',
+            },
+            body: jsonEncode({
+              "contents": [
+                {
+                  "parts": [
+                    {
+                      "text": """
+Analisa gambar ini.
 
-      final streamed  = await request.send().timeout(const Duration(seconds: 30));
-      final response  = await http.Response.fromStream(streamed);
+Jika ada botol plastik:
+{
+  "type": "plastic",
+  "confidence": 0.95
+}
 
-      if (response.statusCode != 200) return AiScanResult.noBottleFound();
+Jika ada botol kaca:
+{
+  "type": "glass",
+  "confidence": 0.95
+}
 
-      final map     = jsonDecode(response.body) as Map<String, dynamic>;
-      final plastic = (map['plastic'] as num?)?.toDouble() ?? 0.0;
-      final glass   = (map['glass']   as num?)?.toDouble() ?? 0.0;
+Jika tidak ada botol:
+{
+  "type": "none",
+  "confidence": 0.0
+}
 
-      const threshold = 0.25;
-      if (plastic >= glass && plastic >= threshold) return AiScanResult.plasticBottle(plastic);
-      if (glass > plastic  && glass   >= threshold) return AiScanResult.glassBottle(glass);
+Balas JSON saja tanpa teks tambahan.
+"""
+                    },
+                    {
+                      "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": base64Image,
+                      }
+                    }
+                  ]
+                }
+              ]
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode != 200) {
+        return AiScanResult.noBottleFound();
+      }
+
+      final responseData = jsonDecode(response.body);
+      final text =
+          responseData['candidates'][0]['content']['parts'][0]['text'];
+
+      // Bersihkan markdown Gemini kalau ada
+      final cleaned = text
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+
+      final result = jsonDecode(cleaned);
+      final type = result['type'];
+      final confidence =
+          (result['confidence'] as num?)?.toDouble() ?? 0.0;
+
+      if (type == 'plastic') return AiScanResult.plasticBottle(confidence);
+      if (type == 'glass') return AiScanResult.glassBottle(confidence);
+
       return AiScanResult.noBottleFound();
-
-    } catch (_) {
+    } catch (e) {
+      print('AI Scan Error: $e');
       return AiScanResult.noBottleFound();
     }
   }

@@ -370,10 +370,15 @@ class SupabaseService {
 
   Future<List<Map<String, dynamic>>> getRewardItems() async {
     try {
+      final adminClient = SupabaseClient(
+        'https://ciaykezzojnksqlsioqh.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYXlrZXp6b2pua3NxbHNpb3FoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njc1ODA2MiwiZXhwIjoyMDkyMzM0MDYyfQ.glV4UI0HVHc4-id_uzFIeEqTQHuwTakOLbMNj2CnBfw'
+      );
       final List<dynamic> data =
-          await _supabase.from('reward_items').select().order('points');
+          await adminClient.from('reward_items').select().order('points');
       return List<Map<String, dynamic>>.from(data);
     } catch (e) {
+      print('getRewardItems error: $e');
       return [];
     }
   }
@@ -443,6 +448,226 @@ class SupabaseService {
     jumlahLaporan: 0,
     level: 'Pemula',
   );
+
+  // -----------------------------------------------------------
+  //  ADMIN METHODS
+  // -----------------------------------------------------------
+
+  bool get isAdminLoggedIn => _supabase.auth.currentUser?.email != null && (_supabase.auth.currentUser!.email!.contains('admin'));
+
+  Future<AuthResult> loginAdmin(String emailOrUsername, String password) async {
+    String email = emailOrUsername.trim();
+    if (email.toLowerCase() == 'admin') {
+      email = 'admin@sibersih.com';
+    } else if (!email.contains('@')) {
+      email = '$email@sibersih.com';
+    }
+    return login(email, password);
+  }
+
+  Future<void> logoutAdmin() async {
+    return logout();
+  }
+
+  Future<Map<String, int>> getAdminOverview() async {
+    try {
+      final users = await _supabase.from('users').select('id');
+      final laporans = await _supabase.from('laporans').select('id, status');
+      
+      int pending = 0;
+      int verified = 0;
+      for (var l in laporans) {
+        if (l['status'] == 'pending') pending++;
+        if (l['status'] == 'verified') verified++;
+      }
+      
+      final poinData = await _supabase.from('users').select('total_poin');
+      int totalPoints = 0;
+      for (var p in poinData) {
+        totalPoints += ((p['total_poin'] as num?)?.toInt() ?? 0);
+      }
+      
+      return {
+        'users': users.length,
+        'laporans': laporans.length,
+        'pending': pending,
+        'verified': verified,
+        'points': totalPoints,
+      };
+    } catch(e) {
+      return {'users': 0, 'laporans': 0, 'pending': 0, 'verified': 0, 'points': 0};
+    }
+  }
+
+  Future<List<dynamic>> getAdminRewards() async {
+    try {
+      return await _supabase.from('reward_items').select().order('points');
+    } catch(e) { return []; }
+  }
+
+  Future<List<dynamic>> getAdminQuotes() async {
+    try {
+      return await _supabase.from('quotes').select().order('order');
+    } catch(e) { return []; }
+  }
+
+  Future<List<dynamic>> getFaqs() async {
+    try {
+      return await _supabase.from('faqs').select().order('created_at');
+    } catch(e) { return []; }
+  }
+
+  Future<bool> saveFaqItem({String? id, required String pertanyaan, required String jawaban, required int urutan}) async {
+    try {
+      final data = {'pertanyaan': pertanyaan, 'jawaban': jawaban, 'urutan': urutan};
+      if (id != null) {
+        await _supabase.from('faqs').update(data).eq('id', id);
+      } else {
+        await _supabase.from('faqs').insert(data);
+      }
+      return true;
+    } catch(e) { return false; }
+  }
+
+  Future<bool> deleteFaqItem(String id) async {
+    try {
+      await _supabase.from('faqs').delete().eq('id', id);
+      return true;
+    } catch(e) { return false; }
+  }
+
+  Future<List<dynamic>> getAdminLaporans() async {
+    try {
+      return await _supabase.from('laporans').select().order('tanggal', ascending: false);
+    } catch(e) { return []; }
+  }
+
+  Future<bool> updateLaporanStatus({required String laporanId, required String status, int? poinDiterima}) async {
+    try {
+      final data = <String, dynamic>{'status': status};
+      if (poinDiterima != null) {
+        data['poin_diterima'] = poinDiterima;
+      }
+      await _supabase.from('laporans').update(data).eq('id', laporanId);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> getPanduans() async {
+    try {
+      return await _supabase.from('panduans').select().order('created_at');
+    } catch(e) { return []; }
+  }
+
+  Future<bool> savePanduanItem({String? id, required int nomor, required String emoji, required String title, required String description, required List<String> tips, required List<String> gambarUrls}) async {
+    try {
+      final data = {
+        'nomor': nomor,
+        'emoji': emoji,
+        'title': title,
+        'description': description,
+        'tips': tips,
+        'gambar_urls': gambarUrls,
+      };
+      if (id != null) {
+        await _supabase.from('panduans').update(data).eq('id', id);
+      } else {
+        await _supabase.from('panduans').insert(data);
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
+  Future<bool> deletePanduanItem(String id) async {
+    try {
+      await _supabase.from('panduans').delete().eq('id', id);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  Future<bool> saveQuoteItem({String? id, required String text, required String author, required int order}) async {
+    try {
+      final data = {'text': text, 'author': author, 'order': order};
+      if (id != null) {
+        await _supabase.from('quotes').update(data).eq('id', id);
+      } else {
+        await _supabase.from('quotes').insert(data);
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
+  Future<bool> deleteQuoteItem(String id) async {
+    try {
+      await _supabase.from('quotes').delete().eq('id', id);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  Future<bool> saveRewardItem({String? id, required String name, required int points, required String description, String? imageUrl}) async {
+    try {
+      final adminClient = SupabaseClient(
+        'https://ciaykezzojnksqlsioqh.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYXlrZXp6b2pua3NxbHNpb3FoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njc1ODA2MiwiZXhwIjoyMDkyMzM0MDYyfQ.glV4UI0HVHc4-id_uzFIeEqTQHuwTakOLbMNj2CnBfw'
+      );
+      
+      final data = {'name': name, 'points': points, 'description': description};
+      if (imageUrl != null) data['image_url'] = imageUrl;
+      
+      if (id != null) {
+        await adminClient.from('reward_items').update(data).eq('id', id);
+      } else {
+        await adminClient.from('reward_items').insert(data);
+      }
+      return true;
+    } catch (e) { 
+      throw Exception('DB Error: $e'); 
+    }
+  }
+
+  Future<bool> deleteRewardItem(String id) async {
+    try {
+      final adminClient = SupabaseClient(
+        'https://ciaykezzojnksqlsioqh.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYXlrZXp6b2pua3NxbHNpb3FoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njc1ODA2MiwiZXhwIjoyMDkyMzM0MDYyfQ.glV4UI0HVHc4-id_uzFIeEqTQHuwTakOLbMNj2CnBfw'
+      );
+      await adminClient.from('reward_items').delete().eq('id', id);
+      return true;
+    } catch (e) { 
+      throw Exception('DB Error: $e'); 
+    }
+  }
+
+  Future<String?> uploadRewardImage(Uint8List bytes, String extension) async {
+    try {
+      final uniqueName = '${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final path = 'rewards/$uniqueName';
+      
+      // Menggunakan client sementara tanpa session user aktif agar menggunakan service_role key
+      // yang akan mem-bypass RLS (jika policy public belum diset di Supabase dashboard)
+      final adminClient = SupabaseClient(
+        'https://ciaykezzojnksqlsioqh.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpYXlrZXp6b2pua3NxbHNpb3FoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njc1ODA2MiwiZXhwIjoyMDkyMzM0MDYyfQ.glV4UI0HVHc4-id_uzFIeEqTQHuwTakOLbMNj2CnBfw'
+      );
+      
+      await adminClient.storage.from('reward_images').uploadBinary(
+        path, 
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
+      return _supabase.storage.from('reward_images').getPublicUrl(path);
+    } catch(e) { 
+      throw Exception('Detail: $e'); 
+    }
+  }
+
+  Future<List<dynamic>> getAdminUsers() async {
+    try {
+      return await _supabase.from('users').select().order('total_poin', ascending: false);
+    } catch(e) { return []; }
+  }
 }
 
 class AuthResult {

@@ -8,14 +8,19 @@ environment:
   flutter: ">=3.10.0"
 
 dependencies:
+
+  image: ^4.2.0
+  flutter_svg: ^2.0.10+1
+  flutter_image_compress: ^2.3.0
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
   image_picker: ^1.1.0
   supabase_flutter: ^1.9.0
   http: ^1.0.0
-  http_parser: ^4.0.0
-  image: ^4.1.7           # untuk preprocessing gambar di mobile  
+  http_parser: ^4.0.0 
+  change_app_package_name: ^1.5.0
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
@@ -24,6 +29,8 @@ dev_dependencies:
 
 flutter:
   assets:
+    - assets/icons/
+    - assets/logos/
   uses-material-design: true
   # Uncomment to use a custom font (download Nunito from Google Fonts)
   fonts:
@@ -36,5 +43,4 @@ flutter:
            weight: 800
          - asset: assets/fonts/Nunito-Black.ttf
            weight: 900
-  # assets:
-  #   - assets/images/
+

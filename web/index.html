@@ -18,18 +18,20 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Sibersih — Platform pelaporan sampah kampus BEM UPI Cibiru dengan sistem poin reward.">
+  <meta name="theme-color" content="#1007BA">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="sibersih">
+  <meta name="apple-mobile-web-app-title" content="Sibersih">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="shortcut icon" type="image/png" href="icons/Icon-192.png"/>
 
-  <title>sibersih</title>
+  <title>Sibersih</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -46,5 +48,28 @@
 
 <!-- ... -->
   <script src="flutter_bootstrap.js" async></script>
+  <script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyD-I0Lysg0hAgFPXW7ArMugYDQc7PE6LhE",
+    authDomain: "sibersih-app.firebaseapp.com",
+    projectId: "sibersih-app",
+    storageBucket: "sibersih-app.firebasestorage.app",
+    messagingSenderId: "688045385645",
+    appId: "1:688045385645:web:4d8659545ebdd0a8dd2324",
+    measurementId: "G-7R1Q14E40P"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 </body>
 </html>
