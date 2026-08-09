@@ -7,6 +7,7 @@ import '../../../models/user_model.dart';
 import '../../../repositories/user_repository.dart';
 import '../../../repositories/auth_repository.dart';
 import '../../../core/app_tokens.dart';
+import '../../../widgets/image_cropper_page.dart';
 
 class ProfilPage extends StatefulWidget {
   final void Function(bool) onToggleTheme;
@@ -45,8 +46,9 @@ class _ProfilPageState extends State<ProfilPage>
     _loadUser();
   }
 
-  Future<void> _loadUser() async {
-    final user = await UserRepository.instance.getCurrentUser();
+  Future<void> _loadUser({bool forceRefresh = false}) async {
+    // Paralel: getUserRank bisa jalan bersamaan setelah kita tahu uid user
+    final user = await UserRepository.instance.getCurrentUser(forceRefresh: forceRefresh);
     final userRank = await UserRepository.instance.getUserRank(user.uid);
     if (mounted) {
       setState(() {
@@ -71,10 +73,19 @@ class _ProfilPageState extends State<ProfilPage>
     );
     if (file == null || !mounted) return;
 
+    // Arahkan ke halaman edit/potong foto (ImageCropperPage) sebelum diunggah
+    final Uint8List? croppedBytes = await Navigator.push<Uint8List?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ImageCropperPage(imagePath: file.path),
+      ),
+    );
+
+    if (croppedBytes == null || !mounted) return;
+
     setState(() => _isUploadingPhoto = true);
     try {
-      final bytes = await file.readAsBytes();
-      final url = await UserRepository.instance.uploadFotoProfile(bytes);
+      final url = await UserRepository.instance.uploadFotoProfile(croppedBytes);
       if (mounted && url != null) {
         setState(() {
           _user = _user?.copyWith(fotoUrl: url);
@@ -341,14 +352,23 @@ class _ProfilPageState extends State<ProfilPage>
           _divider(),
           _pointStat('📦', '${user.jumlahLaporan}', 'Laporan'),
           _divider(),
-          _pointStat('📊', '#${user.rank}', 'Peringkat'),
+          _pointStat(
+            '📊',
+            '#${user.rank}',
+            'Peringkat',
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              _showLeaderboardSheet();
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _pointStat(String emoji, String value, String label) {
-    return Column(
+  Widget _pointStat(String emoji, String value, String label, {VoidCallback? onTap}) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(emoji, style: const TextStyle(fontSize: 22)),
         const SizedBox(height: 4),
@@ -357,6 +377,224 @@ class _ProfilPageState extends State<ProfilPage>
                 color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
         Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 10.5, fontWeight: FontWeight.w600)),
       ],
+    );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: content,
+      );
+    }
+    return content;
+  }
+
+  void _showLeaderboardSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
+      ),
+      builder: (_) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? SibersihColors.cardDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '🏆 Leaderboard 10 Besar',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Mahasiswa paling aktif menjaga kebersihan UPI Cibiru',
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: UserRepository.instance.getLeaderboard(limit: 10),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: SibersihColors.primary),
+                    );
+                  }
+                  if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('😔', style: TextStyle(fontSize: 32)),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Gagal memuat peringkat',
+                            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final list = snapshot.data!;
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: list.length,
+                    itemBuilder: (context, index) {
+                      final item = list[index];
+                      final name = item['nama'] as String? ?? 'User';
+                      final points = (item['total_poin'] as num? ?? 0).toInt();
+                      final fotoUrl = item['foto_url'] as String?;
+                      final level = item['level'] as String? ?? 'Pemula';
+                      final uid = item['id'] as String?;
+                      
+                      final isCurrentUser = uid == _user?.uid;
+                      final rank = index + 1;
+
+                      String rankBadge = '';
+                      if (rank == 1) {
+                        rankBadge = '🥇';
+                      } else if (rank == 2) {
+                        rankBadge = '🥈';
+                      } else if (rank == 3) {
+                        rankBadge = '🥉';
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isCurrentUser
+                              ? SibersihColors.primary.withValues(alpha: 0.08)
+                              : (isDark ? Colors.white.withValues(alpha: 0.02) : Colors.grey.shade50),
+                          borderRadius: BorderRadius.circular(SibersihRadius.md),
+                          border: Border.all(
+                            color: isCurrentUser
+                                ? SibersihColors.primary.withValues(alpha: 0.3)
+                                : Colors.transparent,
+                            width: 1,
+                          ),
+                        ),
+                        child: ListTile(
+                          leading: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 32,
+                                alignment: Alignment.center,
+                                child: rankBadge.isNotEmpty
+                                    ? Text(rankBadge, style: const TextStyle(fontSize: 20))
+                                    : Text(
+                                        '#$rank',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                              ),
+                              const SizedBox(width: 8),
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: SibersihColors.primary.withValues(alpha: 0.1),
+                                backgroundImage: fotoUrl != null && fotoUrl.isNotEmpty
+                                    ? NetworkImage(fotoUrl)
+                                    : null,
+                                child: fotoUrl == null || fotoUrl.isEmpty
+                                    ? const Text('🙋', style: TextStyle(fontSize: 16))
+                                    : null,
+                              ),
+                            ],
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: TextStyle(
+                                    fontWeight: isCurrentUser ? FontWeight.w900 : FontWeight.w700,
+                                    fontSize: 13.5,
+                                    color: isCurrentUser ? SibersihColors.primary : null,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isCurrentUser) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: SibersihColors.primary,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'Kamu',
+                                    style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(
+                            level,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isCurrentUser
+                                  ? SibersihColors.primary.withValues(alpha: 0.15)
+                                  : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(SibersihRadius.sm),
+                            ),
+                            child: Text(
+                              '⭐ $points pts',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: isCurrentUser ? SibersihColors.primary : (isDark ? Colors.white70 : Colors.black87),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
     );
   }
 
@@ -389,7 +627,7 @@ class _ProfilPageState extends State<ProfilPage>
       _infoTile(Icons.person_outline_rounded, 'Nama Lengkap', user.nama,
           () => _showEditDialog('Nama Lengkap', user.nama, onSave: (val) async {
                 await UserRepository.instance.updateUserProfile(nama: val);
-                _loadUser();
+                _loadUser(forceRefresh: true);
               })),
       _divLine(),
       _infoTile(Icons.school_outlined, 'NIM', user.nim, null),
@@ -400,7 +638,7 @@ class _ProfilPageState extends State<ProfilPage>
       _infoTile(Icons.email_outlined, 'Email', user.email,
           () => _showEditDialog('Email', user.email, onSave: (val) async {
                 await UserRepository.instance.updateUserProfile(email: val);
-                _loadUser();
+                _loadUser(forceRefresh: true);
               })),
       _divLine(),
       _infoTile(
@@ -609,49 +847,49 @@ class _ProfilPageState extends State<ProfilPage>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
       ),
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: isDark ? SibersihColors.cardDark : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Hubungi Pusat Bantuan 🌿',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Tim support kami siap melayani pertanyaan dan masalah Anda.',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 20),
-            _helpOptionItem(
-              icon: Icons.chat_bubble_outline_rounded,
-              title: 'WhatsApp Support',
-              subtitle: 'Chat cepat tanggap 24/7',
-              color: Colors.green,
-              onTap: () {
-                Navigator.pop(context);
-                _launchURL('https://wa.me/6287781397197?text=Halo%20Admin%20Sibersih%2C%20saya%20butuh%20bantuan...');
-              },
-            ),
-            const SizedBox(height: 12),
-            _helpOptionItem(
-              icon: Icons.email_outlined,
-              title: 'Email Support',
-              subtitle: 'sibersihbemcibiru@gmail.com',
-              color: Colors.blue,
-              onTap: () {
-                Navigator.pop(context);
-                _launchGmail();
-              },
-            ),
-            const SizedBox(height: 20),
-          ],
+      builder: (_) => Material(
+        color: isDark ? SibersihColors.cardDark : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Hubungi Pusat Bantuan 🌿',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Tim support kami siap melayani pertanyaan dan masalah Anda.',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 20),
+              _helpOptionItem(
+                icon: Icons.chat_bubble_outline_rounded,
+                title: 'WhatsApp Support',
+                subtitle: 'Chat cepat tanggap 24/7',
+                color: Colors.green,
+                onTap: () {
+                  Navigator.pop(context);
+                  _launchURL('https://wa.me/6287781397197?text=Halo%20Admin%20Sibersih%2C%20saya%20butuh%20bantuan...');
+                },
+              ),
+              const SizedBox(height: 12),
+              _helpOptionItem(
+                icon: Icons.email_outlined,
+                title: 'Email Support',
+                subtitle: 'sibersihbemcibiru@gmail.com',
+                color: Colors.blue,
+                onTap: () {
+                  Navigator.pop(context);
+                  _launchGmail();
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
@@ -730,14 +968,21 @@ class _ProfilPageState extends State<ProfilPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? SibersihColors.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(SibersihRadius.lg),
         boxShadow: SibersihColors.cardShadow,
-        border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.05) : SibersihColors.primary.withValues(alpha: 0.06),
-        ),
       ),
-      child: Column(children: children),
+      child: Material(
+        color: isDark ? SibersihColors.cardDark : Colors.white,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SibersihRadius.lg),
+          side: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.05)
+                : SibersihColors.primary.withValues(alpha: 0.06),
+          ),
+        ),
+        child: Column(children: children),
+      ),
     );
   }
 
@@ -918,7 +1163,7 @@ class _ProfilPageState extends State<ProfilPage>
                 }
                 Navigator.pop(dialogContext);
                 await UserRepository.instance.updateUserProfile(jurusan: selected!);
-                _loadUser();
+                _loadUser(forceRefresh: true);
                 if (mounted) _showSnack('Jurusan berhasil diperbarui ✓');
               },
               style: ElevatedButton.styleFrom(
@@ -1045,65 +1290,65 @@ class _PhotoSourceSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? SibersihColors.cardDark : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
+    return Material(
+      color: isDark ? SibersihColors.cardDark : Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(SibersihRadius.xl)),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          const Text('Ubah Foto Profil',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _sourceButton(
-                  context,
-                  icon: Icons.photo_camera_rounded,
-                  label: 'Kamera',
-                  color: SibersihColors.primary,
-                  onTap: () async {
-                    final f = await picker.pickImage(
-                        source: ImageSource.camera, imageQuality: 80);
-                    if (context.mounted) Navigator.pop(context, f);
-                  },
+            const SizedBox(height: 20),
+            const Text('Ubah Foto Profil',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _sourceButton(
+                    context,
+                    icon: Icons.photo_camera_rounded,
+                    label: 'Kamera',
+                    color: SibersihColors.primary,
+                    onTap: () async {
+                      final f = await picker.pickImage(
+                          source: ImageSource.camera, imageQuality: 80);
+                      if (context.mounted) Navigator.pop(context, f);
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _sourceButton(
-                  context,
-                  icon: Icons.photo_library_rounded,
-                  label: 'Galeri',
-                  color: Colors.purple,
-                  onTap: () async {
-                    final f = await picker.pickImage(
-                        source: ImageSource.gallery, imageQuality: 80);
-                    if (context.mounted) Navigator.pop(context, f);
-                  },
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _sourceButton(
+                    context,
+                    icon: Icons.photo_library_rounded,
+                    label: 'Galeri',
+                    color: Colors.purple,
+                    onTap: () async {
+                      final f = await picker.pickImage(
+                          source: ImageSource.gallery, imageQuality: 80);
+                      if (context.mounted) Navigator.pop(context, f);
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(height: 8),
-        ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

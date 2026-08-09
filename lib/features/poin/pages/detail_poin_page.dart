@@ -36,17 +36,20 @@ class _DetailPoinPageState extends State<DetailPoinPage>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
+      // Step 1: Ambil user dulu (perlu uid untuk query selanjutnya)
       final user = await UserRepository.instance.getCurrentUser();
-      final userRank = await UserRepository.instance.getUserRank(user.uid);
-      final updatedUser = user.copyWith(rank: userRank);
 
+      // Step 2: Jalankan 3 query secara paralel setelah uid tersedia
       final results = await Future.wait([
+        UserRepository.instance.getUserRank(user.uid),
         PoinRepository.instance.getPoinBulanIni(),
         PoinRepository.instance.getBulananPoin(),
       ]);
 
-      final poinBulanIni = results[0] as Map<String, int>;
-      final bulananPoin = results[1] as List<BulananPoinModel>;
+      final userRank = results[0] as int;
+      final poinBulanIni = results[1] as Map<String, int>;
+      final bulananPoin = results[2] as List<BulananPoinModel>;
+      final updatedUser = user.copyWith(rank: userRank);
 
       setState(() {
         _user = updatedUser;

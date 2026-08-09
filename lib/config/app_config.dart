@@ -24,6 +24,7 @@ abstract final class AppConfig {
   // ── Edge Functions ────────────────────────────────────────
   static const String geminiScanFunction = 'gemini-scan';
   static const String submitLaporanFunction = 'submit-laporan';
+  static const String redeemRewardFunction = 'redeem-reward';
 
   // ── Storage buckets ───────────────────────────────────────
   static const String bucketProfilePhotos = 'profile_photos';

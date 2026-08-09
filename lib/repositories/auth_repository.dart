@@ -137,6 +137,34 @@ class AuthRepository {
     await _supabase.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  Future<AuthResult> sendPasswordResetEmail(String email) async {
+    try {
+      final emailResolved = await _resolveEmail(email.trim());
+      if (emailResolved == null) {
+        return AuthResult.error('Akun dengan NIM/Email tersebut tidak ditemukan');
+      }
+      final redirectTo = kIsWeb
+          ? Uri.base.origin
+          : 'com.sibersih.app://login-callback';
+      await _supabase.auth.resetPasswordForEmail(
+        emailResolved,
+        redirectTo: redirectTo,
+      );
+      return AuthResult.success();
+    } catch (e) {
+      return AuthResult.error(_extractError(e, defaultMessage: 'Gagal mengirim email reset kata sandi'));
+    }
+  }
+
+  Future<AuthResult> resetPassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+      return AuthResult.success();
+    } catch (e) {
+      return AuthResult.error(_extractError(e, defaultMessage: 'Gagal memperbarui kata sandi'));
+    }
+  }
+
   // -----------------------------------------------------------
   //  GOOGLE PROFILE COMPLETION
   // -----------------------------------------------------------

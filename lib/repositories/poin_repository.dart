@@ -5,6 +5,7 @@
 // ============================================================
 
 import 'package:flutter/foundation.dart';
+import '../config/app_config.dart';
 import '../models/poin_history_model.dart';
 import '../services/supabase_client.dart';
 
@@ -116,10 +117,11 @@ class PoinRepository {
     try {
       final List<dynamic> data = await _supabase
           .from('reward_items')
-          .select('id, name, description, image_url, points, color, pickup_location, pickup_time')
+          .select('id, name, icon, description, image_url, points, pickup_location, pickup_time')
           .order('points');
       return List<Map<String, dynamic>>.from(data);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('getRewardItems error: $e\n$stackTrace');
       return [];
     }
   }
@@ -150,45 +152,28 @@ class PoinRepository {
   // -----------------------------------------------------------
 
   Future<bool> redeemReward({
-    required int points,
-    required String title,
-    required String icon,
+    required int rewardId,
   }) async {
     final authUser = _supabase.auth.currentUser;
     if (authUser == null) return false;
 
     try {
-      // 1. Ambil poin terkini user
-      final userData = await _supabase
-          .from('users')
-          .select('total_poin, poin_keluar')
-          .eq('id', authUser.id)
-          .single();
+      final response = await _supabase.functions.invoke(
+        AppConfig.redeemRewardFunction,
+        body: {
+          'reward_id': rewardId,
+        },
+      );
 
-      final currentPoin = (userData['total_poin'] as num?)?.toInt() ?? 0;
-      final currentKeluar = (userData['poin_keluar'] as num?)?.toInt() ?? 0;
-
-      if (currentPoin < points) return false;
-
-      // 2. Update total_poin dan poin_keluar di tabel users
-      await _supabase.from('users').update({
-        'total_poin': currentPoin - points,
-        'poin_keluar': currentKeluar + points,
-      }).eq('id', authUser.id);
-
-      // 3. Catat di tabel poin_history
-      await _supabase.from('poin_history').insert({
-        'user_id': authUser.id,
-        'type': 'keluar',
-        'icon': icon,
-        'title': 'Tukar: $title',
-        'poin': points,
-        'tanggal': DateTime.now().toIso8601String(),
-      });
-
-      return true;
-    } catch (e) {
-      debugPrint('redeemReward error: $e');
+      if (response.status == 200) {
+        return true;
+      } else {
+        final errorMsg = response.data is Map ? response.data['error'] : 'Unknown error';
+        debugPrint('redeemReward error status ${response.status}: $errorMsg');
+        return false;
+      }
+    } catch (e, stackTrace) {
+      debugPrint('redeemReward exception: $e\n$stackTrace');
       return false;
     }
   }
