@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:supabase/supabase.dart';
 void main() async {
   final client = SupabaseClient(
@@ -12,7 +13,7 @@ void main() async {
     
     await client.storage.from('reward_images').uploadBinary(
       'rewards/test.txt', 
-      [1, 2, 3],
+      Uint8List.fromList([1, 2, 3]),
       fileOptions: const FileOptions(upsert: true)
     );
     print('Upload successful');
