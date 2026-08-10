@@ -6,10 +6,31 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../core/result.dart';
 import '../models/laporan_model.dart';
 import '../services/supabase_client.dart';
 import '../config/app_config.dart';
+
+/// Top-level function untuk dijalankan di background Isolate via compute().
+/// Menerima byte gambar kecil (64x64) dan menghasilkan dHash 1024-bit string.
+String _computeDHash(Uint8List smallBytes) {
+  final image = img.decodeImage(smallBytes);
+  if (image == null) return '';
+
+  final resized = img.copyResize(image, width: 32, height: 32);
+  final grayscale = img.grayscale(resized);
+
+  final pixels = <double>[];
+  for (int y = 0; y < 32; y++) {
+    for (int x = 0; x < 32; x++) {
+      pixels.add(grayscale.getPixel(x, y).luminance.toDouble());
+    }
+  }
+
+  final avg = pixels.reduce((a, b) => a + b) / pixels.length;
+  return pixels.map((p) => p > avg ? '1' : '0').join();
+}
 
 class LaporanRepository {
   // --- Singleton -------------------------------------------
@@ -90,22 +111,28 @@ class LaporanRepository {
 
   /// Difference Hash (dHash) 32x32 → 1024-bit string '0'/'1'.
   /// Dipakai untuk deteksi foto duplikat via hamming distance.
-  String hashImage(Uint8List bytes) {
-    final image = img.decodeImage(bytes);
-    if (image == null) return '';
+  ///
+  /// Proses:
+  /// 1. Downscale native C++ ke 64×64 (hemat 400× piksel vs foto asli)
+  /// 2. Hitung dHash di background Isolate via compute() → 0% UI freeze
+  Future<String> hashImage(Uint8List bytes) async {
+    try {
+      // Pre-downscale ke 64×64 menggunakan native C++ (flutter_image_compress)
+      // sehingga img.decodeImage hanya perlu memproses 4.096 piksel
+      // bukan 1.600.000+ piksel dari foto kamera asli.
+      final smallBytes = await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: 64,
+        minHeight: 64,
+        quality: 50,
+      );
 
-    final resized = img.copyResize(image, width: 32, height: 32);
-    final grayscale = img.grayscale(resized);
-
-    final pixels = <double>[];
-    for (int y = 0; y < 32; y++) {
-      for (int x = 0; x < 32; x++) {
-        pixels.add(grayscale.getPixel(x, y).luminance.toDouble());
-      }
+      // Jalankan hashing di background Isolate agar UI thread bebas freeze
+      return await compute(_computeDHash, Uint8List.fromList(smallBytes));
+    } catch (e) {
+      debugPrint('hashImage error: $e');
+      return '';
     }
-
-    final avg = pixels.reduce((a, b) => a + b) / pixels.length;
-    return pixels.map((p) => p > avg ? '1' : '0').join();
   }
 
   /// Cek apakah [newHash] duplikat dengan salah satu hash di [existingHashes].
@@ -204,7 +231,10 @@ class LaporanRepository {
     }
   }
 
-  Future<List<LaporanModel>> getRiwayatLaporan() async {
+  Future<List<LaporanModel>> getRiwayatLaporan({
+    int limit = 15,
+    int offset = 0,
+  }) async {
     final authUser = _supabase.auth.currentUser;
     if (authUser == null) return [];
     try {
@@ -212,7 +242,8 @@ class LaporanRepository {
           .from('laporans')
           .select()
           .eq('user_id', authUser.id)
-          .order('tanggal');
+          .order('tanggal', ascending: false)
+          .range(offset, offset + limit - 1);
       return data
           .map((e) => LaporanModel.fromMap(e, e['id'].toString()))
           .toList();
@@ -221,8 +252,17 @@ class LaporanRepository {
     }
   }
 
+  List<LaporanModel>? _cachedRecentLaporans;
+  DateTime? _recentLaporansCacheTime;
+
   /// Ambil [limit] laporan terbaru user, diurutkan dari yang terbaru.
   Future<List<LaporanModel>> getRecentLaporans({int limit = 5}) async {
+    if (_cachedRecentLaporans != null &&
+        _recentLaporansCacheTime != null &&
+        DateTime.now().difference(_recentLaporansCacheTime!) <
+            const Duration(minutes: 1)) {
+      return _cachedRecentLaporans!;
+    }
     final authUser = _supabase.auth.currentUser;
     if (authUser == null) return [];
     try {
@@ -232,9 +272,11 @@ class LaporanRepository {
           .eq('user_id', authUser.id)
           .order('tanggal', ascending: false)
           .limit(limit);
-      return data
+      _cachedRecentLaporans = data
           .map((e) => LaporanModel.fromMap(e, e['id'].toString()))
           .toList();
+      _recentLaporansCacheTime = DateTime.now();
+      return _cachedRecentLaporans!;
     } catch (e) {
       return [];
     }

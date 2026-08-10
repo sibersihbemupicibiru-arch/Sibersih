@@ -130,16 +130,26 @@ class PoinRepository {
   //  QUOTES (motivasi)
   // -----------------------------------------------------------
 
+  List<Map<String, String>>? _cachedQuotes;
+  DateTime? _quotesCacheTime;
+
   Future<List<Map<String, String>>> getQuotes() async {
+    if (_cachedQuotes != null &&
+        _quotesCacheTime != null &&
+        DateTime.now().difference(_quotesCacheTime!) < const Duration(minutes: 5)) {
+      return _cachedQuotes!;
+    }
     try {
       final List<dynamic> data =
           await _supabase.from('quotes').select().order('order');
-      return data
+      _cachedQuotes = data
           .map((e) => {
                 'text'  : e['text'].toString(),
                 'author': e['author'].toString(),
               })
           .toList();
+      _quotesCacheTime = DateTime.now();
+      return _cachedQuotes!;
     } catch (e) {
       return [
         {'text': '"Satu sampah, satu masalah. Bersihkan!"', 'author': 'Sibersih'}

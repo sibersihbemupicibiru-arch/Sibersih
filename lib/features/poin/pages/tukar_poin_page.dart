@@ -254,6 +254,7 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
                           ? Image.network(
                               imageUrl,
                               fit: BoxFit.cover,
+                              cacheWidth: 300,
                               errorBuilder: (context, error, stackTrace) =>
                                   const Center(
                                 child: Icon(
@@ -374,6 +375,7 @@ class _TukarPoinPageState extends State<TukarPoinPage> {
                             width: double.infinity,
                             height: double.infinity,
                             fit: BoxFit.cover,
+                            cacheWidth: 600,
                             errorBuilder: (context, error, stackTrace) =>
                                 const Center(
                               child: Icon(Icons.image_not_supported_outlined, size: 40, color: Colors.grey),

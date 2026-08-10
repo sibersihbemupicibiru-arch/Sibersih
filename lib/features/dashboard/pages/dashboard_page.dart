@@ -418,7 +418,8 @@ class _DashboardPageState extends State<DashboardPage>
                                   child: user.fotoUrl != null
                                       ? ClipOval(
                                           child: Image.network(user.fotoUrl!,
-                                              fit: BoxFit.cover))
+                                              fit: BoxFit.cover,
+                                              cacheWidth: 200))
                                       : const Center(
                                           child: Text('🙋',
                                               style:
@@ -1165,11 +1166,12 @@ class _DashboardPageState extends State<DashboardPage>
     if (_quotes.isEmpty) return const SizedBox.shrink();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader('Motivasi Hari Ini 💬'),
-        const SizedBox(height: 12),
+    return RepaintBoundary(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader('Motivasi Hari Ini 💬'),
+          const SizedBox(height: 12),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 500),
           transitionBuilder: (child, anim) => FadeTransition(
@@ -1269,6 +1271,7 @@ class _DashboardPageState extends State<DashboardPage>
           ),
         ),
       ],
+    ),
     );
   }
 

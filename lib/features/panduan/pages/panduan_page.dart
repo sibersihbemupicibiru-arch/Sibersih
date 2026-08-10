@@ -535,6 +535,7 @@ class _GuideCardState extends State<_GuideCard>
               height: 180,
               width: 260,
               fit: BoxFit.cover,
+              cacheWidth: 600,
               errorBuilder: (_, __, ___) => Container(
                 width: 260,
                 height: 180,

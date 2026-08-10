@@ -244,7 +244,9 @@ class _ProfilPageState extends State<ProfilPage>
                                       child: CircularProgressIndicator(
                                           color: Colors.white, strokeWidth: 2))
                                   : (user.fotoUrl != null
-                                      ? Image.network(user.fotoUrl!, fit: BoxFit.cover)
+                                      ? Image.network(user.fotoUrl!,
+                                          fit: BoxFit.cover,
+                                          cacheWidth: 300)
                                       : const Center(
                                           child: Text('🙋',
                                               style: TextStyle(fontSize: 46)))),

@@ -9,7 +9,6 @@ import 'repositories/auth_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  debugProfileBuildsEnabled = true;
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,

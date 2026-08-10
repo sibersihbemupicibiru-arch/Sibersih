@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../config/app_config.dart';
 
 enum BottleType { plasticBottle, glassBottle, unknown }
@@ -60,7 +61,15 @@ class AiScanService {
     String? sourceName,
   }) async {
     try {
-      final base64Image = base64Encode(bytes);
+      // Kompresi thumbnail 480p khusus AI scan
+      // Payload menyusut dari ~700 KB menjadi ~35 KB → anti-timeout di 3G/4G
+      final compressedBytes = await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: 480,
+        minHeight: 480,
+        quality: 60,
+      );
+      final base64Image = base64Encode(compressedBytes);
       final session = Supabase.instance.client.auth.currentSession;
       final response = await http
           .post(

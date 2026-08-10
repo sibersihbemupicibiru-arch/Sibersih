@@ -15,16 +15,26 @@ class UserRepository {
 
   final _supabase = SupabaseClientProvider.instance.client;
 
-  // --- In-memory cache untuk getCurrentUser ----------------
+  // --- In-memory cache untuk getCurrentUser, totalUsers, userRank, & leaderboard ---
   UserModel? _cachedUser;
   DateTime? _cacheTime;
-  static const _cacheDuration = Duration(seconds: 60);
+  static const _cacheDuration = Duration(seconds: 120);
+
+  int? _cachedTotalUsers;
+  DateTime? _totalUsersCacheTime;
+
+  int? _cachedUserRank;
+  String? _cachedUserRankId;
+  DateTime? _userRankCacheTime;
+
+  List<Map<String, dynamic>>? _cachedLeaderboard;
+  DateTime? _leaderboardCacheTime;
 
   // -----------------------------------------------------------
   //  PROFILE
   // -----------------------------------------------------------
 
-  /// Ambil user saat ini. Hasil di-cache selama 60 detik agar
+  /// Ambil user saat ini. Hasil di-cache selama 120 detik agar
   /// tidak hit DB setiap kali halaman dibuka.
   /// Gunakan [forceRefresh: true] setelah update profil / upload foto.
   Future<UserModel> getCurrentUser({bool forceRefresh = false}) async {
@@ -46,6 +56,13 @@ class UserRepository {
   void invalidateCache() {
     _cachedUser = null;
     _cacheTime = null;
+    _cachedTotalUsers = null;
+    _totalUsersCacheTime = null;
+    _cachedUserRank = null;
+    _cachedUserRankId = null;
+    _userRankCacheTime = null;
+    _cachedLeaderboard = null;
+    _leaderboardCacheTime = null;
   }
 
   Future<void> updateUserProfile({
@@ -100,6 +117,11 @@ class UserRepository {
   // -----------------------------------------------------------
 
   Future<List<Map<String, dynamic>>> getLeaderboard({int limit = 10}) async {
+    if (_cachedLeaderboard != null &&
+        _leaderboardCacheTime != null &&
+        DateTime.now().difference(_leaderboardCacheTime!) < _cacheDuration) {
+      return _cachedLeaderboard!;
+    }
     try {
       final List<dynamic> data = await _supabase
           .from('users')
@@ -107,7 +129,9 @@ class UserRepository {
           .order('total_poin', ascending: false)
           .order('id', ascending: true) // Tie-breaker deterministik
           .limit(limit);
-      return List<Map<String, dynamic>>.from(data);
+      _cachedLeaderboard = List<Map<String, dynamic>>.from(data);
+      _leaderboardCacheTime = DateTime.now();
+      return _cachedLeaderboard!;
     } catch (e) {
       return [];
     }
@@ -116,11 +140,18 @@ class UserRepository {
   /// Hitung jumlah total user terdaftar — menggunakan COUNT di DB,
   /// bukan fetch semua baris ke client.
   Future<int> getTotalUsers() async {
+    if (_cachedTotalUsers != null &&
+        _totalUsersCacheTime != null &&
+        DateTime.now().difference(_totalUsersCacheTime!) < _cacheDuration) {
+      return _cachedTotalUsers!;
+    }
     try {
       final response = await _supabase
           .from('users')
           .select('id', const FetchOptions(count: CountOption.exact));
-      return response.count ?? 0;
+      _cachedTotalUsers = response.count ?? 0;
+      _totalUsersCacheTime = DateTime.now();
+      return _cachedTotalUsers!;
     } catch (e) {
       debugPrint('getTotalUsers error: $e');
       return 1;
@@ -132,6 +163,12 @@ class UserRepository {
   ///   1. Ambil poin user ini (1 baris).
   ///   2. COUNT berapa user yang poinnya lebih tinggi + COUNT user poin sama dengan ID lebih kecil.
   Future<int> getUserRank(String userId) async {
+    if (_cachedUserRank != null &&
+        _cachedUserRankId == userId &&
+        _userRankCacheTime != null &&
+        DateTime.now().difference(_userRankCacheTime!) < _cacheDuration) {
+      return _cachedUserRank!;
+    }
     try {
       // Ambil poin user ini — 1 baris saja
       final userData = await _supabase
@@ -158,7 +195,10 @@ class UserRepository {
       final higherCount = higherPoinResponse.count ?? 0;
       final equalCount = equalPoinResponse.count ?? 0;
 
-      return higherCount + equalCount + 1;
+      _cachedUserRank = higherCount + equalCount + 1;
+      _cachedUserRankId = userId;
+      _userRankCacheTime = DateTime.now();
+      return _cachedUserRank!;
     } catch (e) {
       debugPrint('getUserRank error: $e');
       return 1;

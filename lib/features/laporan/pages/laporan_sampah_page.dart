@@ -66,7 +66,7 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   Future<Uint8List> _compressImage(Uint8List bytes) async {
     final result = await FlutterImageCompress.compressWithList(
       bytes,
-      quality: 70,
+      quality: 80,
       minWidth: 1280,
       minHeight: 1280,
     );
@@ -141,8 +141,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     try {
       final file = await _picker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 85,
-        maxWidth: 1920,
+        imageQuality: 80,
+        maxWidth: 1280,
       );
       if (file == null || !mounted) return;
       final bytes = await file.readAsBytes();
@@ -162,7 +162,7 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
     setState(() => _picking = true);
     try {
       final files =
-          await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1280);
+          await _picker.pickMultiImage(imageQuality: 80, maxWidth: 1280);
       for (final f in files) {
         if (_photos.length >= 5) {
           _showSnack('Maksimal 5 foto');
@@ -173,7 +173,7 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
       }
       if (files.isEmpty) {
         final one = await _picker.pickImage(
-            source: ImageSource.gallery, imageQuality: 70);
+            source: ImageSource.gallery, imageQuality: 80, maxWidth: 1280);
         if (one != null) {
           final bytes = await one.readAsBytes();
           await _validateAndProcess(bytes, one.name);
@@ -210,7 +210,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
   }
 
   Future<void> _addPhotoWithWorkflow(Uint8List bytes, String name) async {
-    final hash = LaporanRepository.instance.hashImage(bytes);
+    // hashImage sekarang async (Isolate + downscale 64x64)
+    final hash = await LaporanRepository.instance.hashImage(bytes);
     _dbHashes ??= await LaporanRepository.instance.getUserFotoHashes();
 
     if (hash.isNotEmpty &&
@@ -994,7 +995,8 @@ class _LaporanSampahPageState extends State<LaporanSampahPage>
                       fit: StackFit.expand,
                       children: [
                         Image.memory(p.bytes,
-                            fit: BoxFit.cover, gaplessPlayback: true),
+                            fit: BoxFit.cover, gaplessPlayback: true,
+                            cacheWidth: 600),
                         if (_isScanning && index == _photos.length - 1)
                           _ScanOverlay(controller: _scanLineController),
                         if (p.scanResult != null)

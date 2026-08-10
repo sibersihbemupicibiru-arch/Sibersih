@@ -20,9 +20,13 @@ class RiwayatPage extends StatefulWidget {
 class _RiwayatPageState extends State<RiwayatPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final ScrollController _scrollController = ScrollController();
 
   List<LaporanModel> _allItems = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  static const int _pageSize = 15;
 
   _SortBy _sortBy = _SortBy.waktuTerbaru;
   _JenisFilter _jenisFilter = _JenisFilter.semua;
@@ -32,15 +36,43 @@ class _RiwayatPageState extends State<RiwayatPage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    _scrollController.addListener(_onScroll);
     _loadData();
   }
 
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_loadingMore &&
+        _hasMore) {
+      _loadMore();
+    }
+  }
+
   Future<void> _loadData() async {
-    final data = await LaporanRepository.instance.getRiwayatLaporan();
+    final data = await LaporanRepository.instance
+        .getRiwayatLaporan(limit: _pageSize, offset: 0);
     if (mounted) {
       setState(() {
         _allItems = data;
+        _hasMore = data.length >= _pageSize;
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    final moreData = await LaporanRepository.instance.getRiwayatLaporan(
+      limit: _pageSize,
+      offset: _allItems.length,
+    );
+    if (mounted) {
+      setState(() {
+        _allItems.addAll(moreData);
+        _hasMore = moreData.length >= _pageSize;
+        _loadingMore = false;
       });
     }
   }
@@ -48,6 +80,7 @@ class _RiwayatPageState extends State<RiwayatPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -492,10 +525,30 @@ class _RiwayatPageState extends State<RiwayatPage>
       onRefresh: _loadData,
       color: SibersihColors.primary,
       child: ListView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-        physics: const BouncingScrollPhysics(),
-        itemCount: items.length,
-        itemBuilder: (_, i) => _RiwayatCard(item: items[i]),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        itemCount: items.length + (_loadingMore ? 1 : 0),
+        itemBuilder: (_, i) {
+          if (i == items.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: SibersihColors.primary,
+                  ),
+                ),
+              ),
+            );
+          }
+          return _RiwayatCard(item: items[i]);
+        },
       ),
     );
   }
